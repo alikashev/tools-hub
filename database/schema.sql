@@ -1,0 +1,72 @@
+-- Tool Hub Database Schema
+-- MySQL / MariaDB
+
+CREATE DATABASE IF NOT EXISTS toolhub CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE toolhub;
+
+-- Users table (prepared for future auth)
+CREATE TABLE IF NOT EXISTS users (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    display_name VARCHAR(100) DEFAULT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    is_admin TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Tool modules registry
+CREATE TABLE IF NOT EXISTS modules (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    key_name VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    icon VARCHAR(50) NOT NULL DEFAULT 'fas fa-puzzle-piece',
+    description TEXT DEFAULT NULL,
+    is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Categories for Command Hub (extensible: module_id links categories to a tool)
+CREATE TABLE IF NOT EXISTS categories (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    module_id INT UNSIGNED NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    color VARCHAR(7) DEFAULT '#6c757d',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Commands (Command Hub tool)
+CREATE TABLE IF NOT EXISTS commands (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED DEFAULT NULL,
+    category_id INT UNSIGNED DEFAULT NULL,
+    title VARCHAR(200) NOT NULL,
+    command TEXT NOT NULL,
+    description TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- Indexes for search performance
+CREATE INDEX idx_commands_search ON commands(title(100), command(100), description(100));
+CREATE INDEX idx_categories_module ON categories(module_id);
+CREATE INDEX idx_commands_category ON commands(category_id);
+
+-- Snippets for email responses
+CREATE TABLE IF NOT EXISTS snippets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED DEFAULT NULL,
+    title VARCHAR(200) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
