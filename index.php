@@ -28,8 +28,8 @@ $appName = APP_NAME;
                     <i class="fas fa-cubes"></i>
                     <span><?= $appName ?></span>
                 </div>
-                <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
-                    <i class="fas fa-bars"></i>
+                <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+                    <i class="fas fa-chevron-left"></i>
                 </button>
             </div>
 

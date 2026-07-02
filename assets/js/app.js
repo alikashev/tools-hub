@@ -16,6 +16,7 @@ const state = {
     currentSubview: null,
     filterCategory: '',
     searchQuery: '',
+    sidebarCollapsed: localStorage.getItem('toolhub-sidebar') === 'true',
 };
 
 // ============================================
@@ -158,7 +159,8 @@ function renderNav() {
     const dashItem = document.createElement('button');
     dashItem.className = `nav-item ${state.currentView === 'dashboard' ? 'active' : ''}`;
     dashItem.dataset.view = 'dashboard';
-    dashItem.innerHTML = '<i class="fas fa-th-large"></i> Dashboard';
+    dashItem.title = 'Dashboard';
+    dashItem.innerHTML = '<i class="fas fa-th-large"></i> <span>Dashboard</span>';
     dashItem.addEventListener('click', () => navigate('dashboard'));
     nav.appendChild(dashItem);
 
@@ -177,6 +179,7 @@ function renderNav() {
             icon: 'fa-envelope',
             items: [
                 { view: 'email-anonymizer', icon: 'fa-mask', label: 'Email Anonymizer' },
+                { view: 'email-header-viz', icon: 'fa-code-branch', label: 'Header Visualizer' },
                 { view: 'snippets', icon: 'fa-reply', label: 'Snippets' },
             ],
         },
@@ -188,6 +191,7 @@ function renderNav() {
 
         const header = document.createElement('button');
         header.className = `nav-section-header ${hasActive ? 'has-active' : ''}`;
+        header.title = section.label;
         header.innerHTML = `
             <i class="fas ${section.icon}"></i>
             <span>${section.label}</span>
@@ -211,7 +215,8 @@ function renderNav() {
             const el = document.createElement('button');
             el.className = `nav-item nav-sub-item ${state.currentView === item.view ? 'active' : ''}`;
             el.dataset.view = item.view;
-            el.innerHTML = `<i class="fas ${item.icon}"></i> ${item.label}`;
+            el.title = item.label;
+            el.innerHTML = `<i class="fas ${item.icon}"></i> <span>${item.label}</span>`;
             el.addEventListener('click', () => navigate(item.view));
             inner.appendChild(el);
         });
@@ -237,7 +242,7 @@ function navigate(view) {
         n.classList.toggle('active', n.dataset.view === view);
     });
 
-    closeMobileSidebar();
+    closeSidebar();
 
     if (view === 'dashboard') {
         renderDashboard();
@@ -245,6 +250,8 @@ function navigate(view) {
         renderCommands();
     } else if (view === 'email-anonymizer') {
         renderEmailAnonymizer();
+    } else if (view === 'email-header-viz') {
+        renderEmailHeaderViz();
     } else if (view === 'snippets') {
         renderSnippets();
     }
@@ -254,31 +261,34 @@ function navigate(view) {
 // Dashboard
 // ============================================
 async function renderDashboard() {
-    setPageTitle('Dashboard', 'Tool Hub overview');
+    setPageTitle('Dashboard', 'Your central workspace');
 
     const body = document.getElementById('contentBody');
 
     try {
         const commands = await api('GET', 'commands');
 
-        const tools = [
+        const activeTools = [
             {
                 key: 'commands',
                 icon: 'fa-terminal',
                 name: 'Command Hub',
                 desc: 'Store, organize and copy Linux commands',
                 color: '#6c63ff',
-                status: 'active',
-                stats: `${commands.length} commands`,
             },
             {
                 key: 'email-anonymizer',
                 icon: 'fa-mask',
                 name: 'Email Anonymizer',
-                desc: 'Anonymize email addresses for privacy',
+                desc: 'Anonymize email addresses instantly for privacy',
                 color: '#22c55e',
-                status: 'active',
-                stats: 'New',
+            },
+            {
+                key: 'email-header-viz',
+                icon: 'fa-code-branch',
+                name: 'Header Visualizer',
+                desc: 'Parse and analyze email headers with color-coded insights',
+                color: '#3b82f6',
             },
             {
                 key: 'snippets',
@@ -286,120 +296,40 @@ async function renderDashboard() {
                 name: 'Snippets',
                 desc: 'Save and copy standard email responses',
                 color: '#14b8a6',
-                status: 'active',
-                stats: 'New',
-            },
-            {
-                key: null,
-                icon: 'fa-key',
-                name: 'Password Manager',
-                desc: 'Securely store and manage passwords',
-                color: '#f59e0b',
-                status: 'soon',
-                stats: 'Coming soon',
-            },
-            {
-                key: null,
-                icon: 'fa-plug',
-                name: 'API Tester',
-                desc: 'Test and debug API endpoints',
-                color: '#3b82f6',
-                status: 'soon',
-                stats: 'Coming soon',
-            },
-            {
-                key: null,
-                icon: 'fa-server',
-                name: 'Server Monitor',
-                desc: 'Monitor server health and performance',
-                color: '#f59e0b',
-                status: 'soon',
-                stats: 'Coming soon',
-            },
-            {
-                key: null,
-                icon: 'fa-database',
-                name: 'Database Query Tool',
-                desc: 'Run and save database queries',
-                color: '#ef4444',
-                status: 'soon',
-                stats: 'Coming soon',
-            },
-            {
-                key: null,
-                icon: 'fa-network-wired',
-                name: 'SSH Manager',
-                desc: 'Manage SSH connections and keys',
-                color: '#8b5cf6',
-                status: 'soon',
-                stats: 'Coming soon',
-            },
-            {
-                key: null,
-                icon: 'fa-code',
-                name: 'Script Library',
-                desc: 'Store and organize scripts',
-                color: '#ec4899',
-                status: 'soon',
-                stats: 'Coming soon',
-            },
-            {
-                key: null,
-                icon: 'fa-sticky-note',
-                name: 'Notes',
-                desc: 'Take and organize quick notes',
-                color: '#14b8a6',
-                status: 'soon',
-                stats: 'Coming soon',
             },
         ];
 
         body.innerHTML = `
-            <div class="dashboard-grid">
-                <div class="dashboard-welcome">
-                    <h2>Welcome to Tool Hub</h2>
-                    <p>Your central workspace for developer tools. Select a tool below or use the sidebar to get started.</p>
-                </div>
-
-                <div class="quick-stats">
-                    <div class="stat-card">
-                        <div class="stat-icon blue"><i class="fas fa-terminal"></i></div>
-                        <div class="stat-info">
-                            <h3>${commands.length}</h3>
-                            <p>Saved Commands</p>
+            <div class="dashboard">
+                <div class="dash-stats">
+                    <div class="dash-stat">
+                        <div class="dash-stat-icon blue"><i class="fas fa-terminal"></i></div>
+                        <div class="dash-stat-info">
+                            <span class="dash-stat-value">${commands.length}</span>
+                            <span class="dash-stat-label">Saved Commands</span>
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon green"><i class="fas fa-tools"></i></div>
-                        <div class="stat-info">
-                            <h3>${tools.length}</h3>
-                            <p>Available Tools</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon purple"><i class="fas fa-rocket"></i></div>
-                        <div class="stat-info">
-                            <h3>${tools.filter(t => t.status === 'soon').length}</h3>
-                            <p>Coming Soon</p>
+                    <div class="dash-stat-divider"></div>
+                    <div class="dash-stat">
+                        <div class="dash-stat-icon green"><i class="fas fa-tools"></i></div>
+                        <div class="dash-stat-info">
+                            <span class="dash-stat-value">${activeTools.length}</span>
+                            <span class="dash-stat-label">Active Tools</span>
                         </div>
                     </div>
                 </div>
 
-                <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:16px;">
-                    <i class="fas fa-th-large" style="color:var(--accent);margin-right:8px;"></i>
-                    All Tools
-                </h2>
-                <div class="module-grid">
-                    ${tools.map(t => `
-                        <div class="module-card ${t.status === 'active' ? 'module-card-active' : ''}"
-                             ${t.key ? `data-nav="${t.key}"` : ''}>
-                            <div class="module-card-icon" style="background:${t.color}18;color:${t.color}">
+                <div class="dash-section-label">Quick Access</div>
+                <div class="dash-tools">
+                    ${activeTools.map(t => `
+                        <div class="dash-tool" data-nav="${t.key}">
+                            <div class="dash-tool-icon" style="background:${t.color}18;color:${t.color}">
                                 <i class="fas ${t.icon}"></i>
                             </div>
                             <h3>${t.name}</h3>
                             <p>${t.desc}</p>
-                            <span class="module-badge ${t.status}">
-                                ${t.status === 'active' ? 'Active' : 'Coming soon'}
+                            <span class="dash-tool-action">
+                                Open <i class="fas fa-arrow-right"></i>
                             </span>
                         </div>
                     `).join('')}
@@ -407,7 +337,7 @@ async function renderDashboard() {
             </div>
         `;
 
-        document.querySelectorAll('.module-card[data-nav]').forEach(card => {
+        document.querySelectorAll('.dash-tool[data-nav]').forEach(card => {
             card.addEventListener('click', () => navigate(card.dataset.nav));
         });
     } catch (err) {
@@ -925,6 +855,301 @@ function renderEmailAnonymizer() {
 }
 
 // ============================================
+// Email Header Visualizer
+// ============================================
+function renderEmailHeaderViz() {
+    setPageTitle('Header Visualizer', 'Parse and analyze email headers');
+
+    const body = document.getElementById('contentBody');
+    body.innerHTML = `
+        <div class="hdr-wrap">
+            <div class="hdr-card">
+                <div class="hdr-card-header">
+                    <i class="fas fa-code-branch"></i>
+                    <h2>Email Header Visualizer</h2>
+                </div>
+                <p class="hdr-desc">
+                    Paste raw email headers below to visualize and analyze delivery paths,
+                    authentication results, and potential issues.
+                </p>
+
+                <div class="hdr-input-area">
+                    <div class="hdr-input-header">
+                        <label>Raw Headers</label>
+                        <div class="hdr-input-actions">
+                            <button class="btn btn-sm btn-secondary" id="hdrClearBtn">
+                                <i class="fas fa-eraser"></i> Clear
+                            </button>
+                            <button class="btn btn-sm btn-secondary" id="hdrSampleBtn">
+                                <i class="fas fa-file-lines"></i> Sample
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="hdrInput" rows="8" placeholder="Paste email headers here..." class="font-mono" spellcheck="false"></textarea>
+                </div>
+
+                <div id="hdrOutput" class="hdr-output"></div>
+            </div>
+        </div>
+    `;
+
+    const input = document.getElementById('hdrInput');
+    const output = document.getElementById('hdrOutput');
+
+    function parseHeaders(raw) {
+        const lines = raw.split('\n');
+        const headers = [];
+        let currentKey = null;
+        let currentValue = '';
+
+        for (let line of lines) {
+            if (/^\s+/.test(line) && currentKey) {
+                currentValue += ' ' + line.trim();
+            } else if (line.includes(':')) {
+                if (currentKey) {
+                    headers.push({ key: currentKey, value: currentValue });
+                }
+                const idx = line.indexOf(':');
+                currentKey = line.slice(0, idx).trim();
+                currentValue = line.slice(idx + 1).trim();
+            }
+        }
+        if (currentKey) {
+            headers.push({ key: currentKey, value: currentValue });
+        }
+        return headers;
+    }
+
+    function classifyHeader(key) {
+        const k = key.toLowerCase();
+        if (k === 'from' || k === 'to' || k === 'subject' || k === 'date' || k === 'message-id' || k === 'reply-to') return 'overview';
+        if (k === 'received-spf' || k === 'authentication-results' || k === 'dkim-signature' || k === 'dmarc-result') return 'auth';
+        if (k === 'received') return 'routing';
+        if (k === 'return-path' || k === 'x-spam-status' || k === 'x-spam-score' || k === 'x-spam-flag' || k === 'x-spam-report') return 'alert';
+        return 'other';
+    }
+
+    function getHeaderStatus(key, value) {
+        const k = key.toLowerCase();
+        const v = value.toLowerCase();
+
+        if (k === 'received-spf') {
+            if (v.includes('pass')) return 'pass';
+            if (v.includes('fail') || v.includes('softfail')) return 'fail';
+            if (v.includes('neutral') || v.includes('none')) return 'warn';
+        }
+        if (k === 'authentication-results') {
+            if (v.includes('dkim=pass') || v.includes('spf=pass') || v.includes('dmarc=pass')) return 'pass';
+            if (v.includes('dkim=fail') || v.includes('spf=fail') || v.includes('dmarc=fail')) return 'fail';
+            if (v.includes('dkim=neutral') || v.includes('spf=neutral') || v.includes('dmarc=neutral')) return 'warn';
+        }
+        if (k === 'x-spam-flag' || k === 'x-spam-status') {
+            if (v.includes('yes') || v.includes('spam')) return 'fail';
+        }
+        if (k === 'x-spam-score') {
+            const num = parseFloat(value);
+            if (num > 5) return 'fail';
+            if (num > 2) return 'warn';
+        }
+        return null;
+    }
+
+    function getStatusIcon(status) {
+        if (status === 'pass') return '<i class="fas fa-check-circle"></i>';
+        if (status === 'fail') return '<i class="fas fa-times-circle"></i>';
+        if (status === 'warn') return '<i class="fas fa-exclamation-triangle"></i>';
+        return '';
+    }
+
+    function render() {
+        const raw = input.value.trim();
+        if (!raw) {
+            output.innerHTML = '<div class="hdr-empty">Paste email headers above to see analysis.</div>';
+            return;
+        }
+
+        const headers = parseHeaders(raw);
+        if (!headers.length) {
+            output.innerHTML = '<div class="hdr-empty">No valid headers found. Make sure each line follows <code>Header: value</code> format.</div>';
+            return;
+        }
+
+        const overview = [];
+        const routing = [];
+        const auth = [];
+        const alerts = [];
+        const other = [];
+
+        headers.forEach(h => {
+            const cls = classifyHeader(h.key);
+            const status = getHeaderStatus(h.key, h.value);
+            if (cls === 'overview') overview.push(h);
+            else if (cls === 'routing') routing.push(h);
+            else if (cls === 'auth') auth.push(h);
+            else if (cls === 'alert') alerts.push(h);
+            else other.push(h);
+        });
+
+        let html = '';
+
+        // Overview
+        if (overview.length) {
+            html += `
+                <div class="hdr-section">
+                    <div class="hdr-section-title"><i class="fas fa-envelope"></i> Overview</div>
+                    <div class="hdr-table">
+                        ${overview.map(h => `
+                            <div class="hdr-row">
+                                <span class="hdr-key">${escHtml(h.key)}</span>
+                                <span class="hdr-val">${escHtml(h.value)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // Authentication
+        if (auth.length) {
+            html += `
+                <div class="hdr-section">
+                    <div class="hdr-section-title"><i class="fas fa-shield-halved"></i> Authentication</div>
+                    <div class="hdr-table">
+                        ${auth.map(h => {
+                            const status = getHeaderStatus(h.key, h.value);
+                            const icon = getStatusIcon(status);
+                            const statusClass = status ? `hdr-status-${status}` : '';
+                            return `
+                                <div class="hdr-row ${statusClass}">
+                                    <span class="hdr-key">${escHtml(h.key)}</span>
+                                    <span class="hdr-val">${icon} ${escHtml(h.value)}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // Alerts / Spam
+        if (alerts.length) {
+            html += `
+                <div class="hdr-section">
+                    <div class="hdr-section-title"><i class="fas fa-bell"></i> Flags &amp; Alerts</div>
+                    <div class="hdr-table">
+                        ${alerts.map(h => {
+                            const status = getHeaderStatus(h.key, h.value);
+                            const icon = getStatusIcon(status);
+                            const statusClass = status ? `hdr-status-${status}` : 'hdr-status-warn';
+                            return `
+                                <div class="hdr-row ${statusClass}">
+                                    <span class="hdr-key">${escHtml(h.key)}</span>
+                                    <span class="hdr-val">${icon} ${escHtml(h.value)}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // Routing (Received)
+        if (routing.length) {
+            html += `
+                <div class="hdr-section">
+                    <div class="hdr-section-title"><i class="fas fa-route"></i> Delivery Path</div>
+                    <div class="hdr-timeline">
+                        ${routing.map((h, i) => {
+                            const isFirst = i === 0;
+                            const isLast = i === routing.length - 1;
+                            let label = 'Intermediate hop';
+                            if (isFirst) label = 'Final delivery';
+                            if (isLast) label = 'Originating';
+                            return `
+                                <div class="hdr-timeline-item ${isFirst ? 'hdr-hop-last' : isLast ? 'hdr-hop-first' : ''}">
+                                    <div class="hdr-timeline-dot"></div>
+                                    <div class="hdr-timeline-body">
+                                        <div class="hdr-timeline-label">${label}</div>
+                                        <div class="hdr-timeline-content">${escHtml(h.value)}</div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // Other headers
+        if (other.length) {
+            html += `
+                <div class="hdr-section">
+                    <div class="hdr-section-title"><i class="fas fa-list"></i> Other Headers</div>
+                    <div class="hdr-table">
+                        ${other.map(h => `
+                            <div class="hdr-row">
+                                <span class="hdr-key">${escHtml(h.key)}</span>
+                                <span class="hdr-val hdr-val-mono">${escHtml(h.value)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // Summary bar
+        const passCount = [...auth, ...alerts].filter(h => getHeaderStatus(h.key, h.value) === 'pass').length;
+        const failCount = [...auth, ...alerts].filter(h => getHeaderStatus(h.key, h.value) === 'fail').length;
+        const warnCount = [...auth, ...alerts].filter(h => getHeaderStatus(h.key, h.value) === 'warn').length;
+
+        html = `
+            <div class="hdr-summary">
+                <span class="hdr-summary-item hdr-summary-ok"><i class="fas fa-check-circle"></i> ${passCount} passed</span>
+                <span class="hdr-summary-item hdr-summary-warn"><i class="fas fa-exclamation-triangle"></i> ${warnCount} warnings</span>
+                <span class="hdr-summary-item hdr-summary-err"><i class="fas fa-times-circle"></i> ${failCount} failures</span>
+                <span class="hdr-summary-item hdr-summary-total"><i class="fas fa-hashtag"></i> ${headers.length} headers</span>
+            </div>
+        ` + html;
+
+        output.innerHTML = html;
+    }
+
+    input.addEventListener('input', render);
+
+    document.getElementById('hdrClearBtn').addEventListener('click', () => {
+        input.value = '';
+        render();
+        input.focus();
+    });
+
+    document.getElementById('hdrSampleBtn').addEventListener('click', () => {
+        input.value = `Return-Path: <bounce@example.com>
+Received: from mail-smtp-1.example.com (mail-smtp-1.example.com [203.0.113.5])
+ by mx.example.org (Postfix) with ESMTPS id ABC123
+ for <user@example.org>; Tue, 15 Jul 2025 10:30:45 +0000 (UTC)
+Received: from smtp.internal.example.com (smtp.internal.example.com [10.0.0.45])
+ by mail-smtp-1.example.com (Postfix) with ESMTP id XYZ789
+ for <user@example.org>; Tue, 15 Jul 2025 10:30:44 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=example.com;
+ s=selector2025; t=1756789045;
+ bh=abc123def456ghi789jkl==; h=From:To:Subject:Date;
+ b=signaturedatahere
+From: "John Doe" <john@example.com>
+To: user@example.org
+Subject: Important meeting tomorrow
+Date: Tue, 15 Jul 2025 10:30:30 +0000
+Message-ID: <msgid12345@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Received-SPF: pass (example.com: domain of john@example.com designates 203.0.113.5 as permitted sender)
+Authentication-Results: mx.example.org;
+ dkim=pass (1024-bit key) header.d=example.com header.i=@example.com header.b=signaturedata;
+ spf=pass (mx.example.org: domain of example.com designates 203.0.113.5 as permitted sender) smtp.mailfrom=example.com;
+ dmarc=pass (p=REJECT) header.from=example.com
+X-Spam-Score: 1.2
+X-Spam-Status: No`;
+        render();
+    });
+
+    render();
+}
+
+// ============================================
 // Snippets
 // ============================================
 async function renderSnippets() {
@@ -1349,26 +1574,73 @@ function toggleTheme() {
 }
 
 // ============================================
-// Sidebar (Mobile)
+// Sidebar (Collapse & Mobile)
 // ============================================
-function toggleMobileSidebar() {
+function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('open');
+    const isMobile = window.innerWidth <= 768;
 
-    let overlay = document.querySelector('.mobile-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'mobile-overlay';
-        overlay.addEventListener('click', closeMobileSidebar);
-        document.body.appendChild(overlay);
+    if (isMobile) {
+        sidebar.classList.toggle('open');
+        let overlay = document.querySelector('.mobile-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'mobile-overlay';
+            overlay.addEventListener('click', closeSidebar);
+            document.body.appendChild(overlay);
+        }
+        overlay.classList.toggle('active', sidebar.classList.contains('open'));
+    } else {
+        sidebar.classList.toggle('collapsed');
+        state.sidebarCollapsed = sidebar.classList.contains('collapsed');
+        localStorage.setItem('toolhub-sidebar', state.sidebarCollapsed);
+        updateSidebarToggleIcon();
     }
-    overlay.classList.toggle('active', sidebar.classList.contains('open'));
 }
 
-function closeMobileSidebar() {
-    document.getElementById('sidebar').classList.remove('open');
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.remove('open');
     const overlay = document.querySelector('.mobile-overlay');
     if (overlay) overlay.classList.remove('active');
+}
+
+function updateSidebarToggleIcon() {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.getElementById('sidebarToggle');
+    if (!toggle) return;
+    const icon = toggle.querySelector('i');
+    if (window.innerWidth <= 768) {
+        icon.className = 'fas fa-bars';
+    } else {
+        icon.className = sidebar.classList.contains('collapsed')
+            ? 'fas fa-chevron-right'
+            : 'fas fa-chevron-left';
+    }
+}
+
+function initSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (state.sidebarCollapsed && window.innerWidth > 768) {
+        sidebar.classList.add('collapsed');
+    }
+    updateSidebarToggleIcon();
+
+    document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('collapsed');
+        } else {
+            sidebar.classList.remove('open');
+            const overlay = document.querySelector('.mobile-overlay');
+            if (overlay) overlay.classList.remove('active');
+            if (state.sidebarCollapsed) {
+                sidebar.classList.add('collapsed');
+            }
+        }
+        updateSidebarToggleIcon();
+    });
 }
 
 // ============================================
@@ -1429,7 +1701,7 @@ function initKeyboard() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeAllModals();
-            closeMobileSidebar();
+            closeSidebar();
         }
         if (e.ctrlKey && e.key === 'k') {
             e.preventDefault();
@@ -1447,11 +1719,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     initModals();
     initKeyboard();
 
-    // Sidebar toggle
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', toggleMobileSidebar);
-    }
+    // Sidebar init
+    initSidebar();
 
     // Theme toggle
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);

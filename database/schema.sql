@@ -1,8 +1,8 @@
 -- Tool Hub Database Schema
 -- MySQL / MariaDB
 
-CREATE DATABASE IF NOT EXISTS toolhub CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE toolhub;
+--CREATE DATABASE IF NOT EXISTS toolhub CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+--USE toolhub;
 
 -- Users table (prepared for future auth)
 CREATE TABLE IF NOT EXISTS users (
