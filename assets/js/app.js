@@ -267,6 +267,7 @@ async function renderDashboard() {
 
     try {
         const commands = await api('GET', 'commands');
+        const snippets = await api('GET', 'snippets');
 
         const activeTools = [
             {
@@ -307,6 +308,14 @@ async function renderDashboard() {
                         <div class="dash-stat-info">
                             <span class="dash-stat-value">${commands.length}</span>
                             <span class="dash-stat-label">Saved Commands</span>
+                        </div>
+                    </div>
+                    <div class="dash-stat-divider"></div>
+                    <div class="dash-stat">
+                        <div class="dash-stat-icon purple"><i class="fas fa-reply"></i></div>
+                        <div class="dash-stat-info">
+                            <span class="dash-stat-value">${snippets.length}</span>
+                            <span class="dash-stat-label">Saved Snippets</span>
                         </div>
                     </div>
                     <div class="dash-stat-divider"></div>
