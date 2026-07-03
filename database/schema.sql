@@ -70,3 +70,13 @@ CREATE TABLE IF NOT EXISTS snippets (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- IP Reputation cache
+CREATE TABLE IF NOT EXISTS ip_cache (
+    ip VARCHAR(45) NOT NULL,
+    source VARCHAR(50) NOT NULL,
+    data JSON NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (ip, source),
+    INDEX idx_ip_cache_created (created_at)
+) ENGINE=InnoDB;

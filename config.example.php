@@ -19,3 +19,9 @@ define('DEBUG', false);
 
 // Timezone
 date_default_timezone_set('UTC');
+
+// IP Reputation API Keys (optional — leave empty to skip those sources)
+// Get AbuseIPDB key: https://www.abuseipdb.com/register
+define('ABUSEIPDB_KEY', '');
+// Get VirusTotal key: https://www.virustotal.com/gui/join-us
+define('VIRUSTOTAL_KEY', '');

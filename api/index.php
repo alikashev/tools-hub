@@ -15,6 +15,8 @@ cors();
 $parts = get_route_parts();
 $resource = $parts[0] ?? null;
 
+define('API_ROUTER_ACTIVE', true);
+
 try {
     switch ($resource) {
         case 'modules':
@@ -31,6 +33,9 @@ try {
             break;
         case 'snippets':
             require __DIR__ . '/snippets.php';
+            break;
+        case 'ip-reputation':
+            require __DIR__ . '/ip-reputation.php';
             break;
         default:
             Response::notFound('API endpoint not found');

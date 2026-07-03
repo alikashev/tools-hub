@@ -149,7 +149,7 @@ async function loadModules() {
 }
 
 const navState = {
-    expanded: { 'command-hub': true, 'email-tools': false },
+    expanded: { 'command-hub': true, 'email-tools': false, 'network-tools': true },
 };
 
 function renderNav() {
@@ -181,6 +181,14 @@ function renderNav() {
                 { view: 'email-anonymizer', icon: 'fa-mask', label: 'Email Anonymizer' },
                 { view: 'email-header-viz', icon: 'fa-code-branch', label: 'Header Visualizer' },
                 { view: 'snippets', icon: 'fa-reply', label: 'Snippets' },
+            ],
+        },
+        {
+            key: 'network-tools',
+            label: 'Network Tools',
+            icon: 'fa-globe',
+            items: [
+                { view: 'ip-reputation', icon: 'fa-shield-halved', label: 'IP Reputation' },
             ],
         },
     ];
@@ -254,6 +262,8 @@ function navigate(view) {
         renderEmailHeaderViz();
     } else if (view === 'snippets') {
         renderSnippets();
+    } else if (view === 'ip-reputation') {
+        renderIpReputation();
     }
 }
 
@@ -297,6 +307,13 @@ async function renderDashboard() {
                 name: 'Snippets',
                 desc: 'Save and copy standard email responses',
                 color: '#14b8a6',
+            },
+            {
+                key: 'ip-reputation',
+                icon: 'fa-shield-halved',
+                name: 'IP Reputation',
+                desc: 'Analyze IP addresses for security and abuse history',
+                color: '#f59e0b',
             },
         ];
 
@@ -1156,6 +1173,367 @@ X-Spam-Status: No`;
     });
 
     render();
+}
+
+// ============================================
+// IP Reputation Checker
+// ============================================
+function renderIpReputation() {
+    setPageTitle('IP Reputation', 'Analyze IP addresses for security and reputation');
+
+    const body = document.getElementById('contentBody');
+    const searchHistory = JSON.parse(localStorage.getItem('ip-history') || '[]');
+
+    body.innerHTML = `
+        <div class="ipr-wrap">
+            <div class="ipr-card">
+                <div class="ipr-card-top">
+                    <div class="ipr-card-badge">
+                        <i class="fas fa-shield-halved"></i>
+                        <span>Network Security Tool</span>
+                    </div>
+                    <button class="btn btn-icon btn-icon-danger" id="iprClearBtn" title="Clear">
+                        <i class="fas fa-eraser"></i>
+                    </button>
+                </div>
+                <h2 class="ipr-card-title">IP Reputation Checker</h2>
+                <p class="ipr-desc">Check any IPv4 or IPv6 address against multiple security sources to determine its reputation, abuse history, and risk level.</p>
+
+                <div class="ipr-search-section">
+                    <div class="ipr-search-box">
+                        <i class="fas fa-search ipr-search-icon"></i>
+                        <input type="text" id="iprInput" placeholder="Enter an IP address..." class="ipr-search-input" autocomplete="off" spellcheck="false">
+                        <button class="ipr-search-btn" id="iprAnalyzeBtn">
+                            <i class="fas fa-shield-halved"></i>
+                            Analyze
+                        </button>
+                    </div>
+                </div>
+
+                ${searchHistory.length > 0 ? `
+                <div class="ipr-history">
+                    <div class="ipr-history-header">
+                        <i class="fas fa-clock-rotate"></i>
+                        <span>Recent Checks</span>
+                        <button class="ipr-history-clear" id="iprHistoryClear" title="Clear history">&times;</button>
+                    </div>
+                    <div class="ipr-history-items" id="iprHistoryItems">
+                        ${searchHistory.slice(0, 10).map(entry => `
+                            <span class="ipr-history-chip" data-ip="${entry.ip}">
+                                <span class="ipr-history-dot" style="background:${entry.reputation === 'malicious' ? 'var(--danger)' : entry.reputation === 'suspicious' ? 'var(--warning)' : 'var(--success)'}"></span>
+                                ${entry.ip}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
+                <div id="iprResult">
+                    <div class="ipr-empty">
+                        <i class="fas fa-shield-halved"></i>
+                        <h3>Ready to analyze</h3>
+                        <p>Enter an IP address above to check its reputation.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const input = document.getElementById('iprInput');
+    const resultDiv = document.getElementById('iprResult');
+    const analyzeBtn = document.getElementById('iprAnalyzeBtn');
+    const clearBtn = document.getElementById('iprClearBtn');
+
+    async function analyze(ip) {
+        ip = ip.trim();
+        if (!ip) { toast('Please enter an IP address.', 'warning'); return; }
+        if (!/^[0-9a-fA-F:.]+$/.test(ip) || !(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip) || /^[0-9a-fA-F:]+$/.test(ip))) {
+            toast('Invalid IP address format.', 'error');
+            return;
+        }
+
+        resultDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Analyzing IP...</span></div>';
+        analyzeBtn.disabled = true;
+        analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+
+        try {
+            const data = await api('GET', `ip-reputation?ip=${encodeURIComponent(ip)}`);
+            resultDiv.innerHTML = renderIpResult(data);
+
+            const history = JSON.parse(localStorage.getItem('ip-history') || '[]');
+            history.unshift({ ip: data.ip, reputation: data.summary.reputation, time: new Date().toISOString() });
+            if (history.length > 50) history.length = 50;
+            localStorage.setItem('ip-history', JSON.stringify(history));
+
+            attachIpResultEvents(data);
+        } catch (err) {
+            resultDiv.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Analysis Failed</h3><p>${escHtml(err.message)}</p></div>`;
+        } finally {
+            analyzeBtn.disabled = false;
+            analyzeBtn.innerHTML = '<i class="fas fa-shield-halved"></i> Analyze';
+        }
+    }
+
+    function renderIpResult(data) {
+        const s = data.summary;
+        const level = s.reputation === 'malicious' ? 'high' : s.reputation === 'suspicious' ? 'med' : 'low';
+        const barColor = level === 'high' ? 'var(--danger)' : level === 'med' ? 'var(--warning)' : 'var(--success)';
+        const barBg = level === 'high' ? 'var(--danger-bg)' : level === 'med' ? 'rgba(245,158,11,0.12)' : 'var(--success-bg)';
+        const riskIcon = s.reputation === 'malicious' ? 'fa-circle-exclamation' : s.reputation === 'suspicious' ? 'fa-triangle-exclamation' : 'fa-circle-check';
+
+        return `
+            <div class="ipr-result">
+                <div class="ipr-banner" style="background:${barBg};border-color:${barColor}">
+                    <div class="ipr-banner-left">
+                        <div class="ipr-banner-icon" style="background:${barColor};color:#fff">
+                            <i class="fas ${riskIcon}"></i>
+                        </div>
+                        <div class="ipr-banner-info">
+                            <div class="ipr-banner-ip">
+                                <span class="font-mono">${data.ip}</span>
+                                <button class="ipr-banner-copy" id="iprCopyBtn" title="Copy IP">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <div class="ipr-banner-tags">
+                                <span class="ipr-banner-tag" style="background:${barColor}20;color:${barColor}">
+                                    <i class="fas ${riskIcon}"></i> ${s.reputation}
+                                </span>
+                                <span class="ipr-banner-tag" style="background:var(--info-bg);color:var(--info)">
+                                    <i class="fas fa-flag"></i> ${s.country_code || s.country}
+                                </span>
+                                <span class="ipr-banner-tag" style="background:var(--accent-light);color:var(--accent)">
+                                    <i class="fas fa-sitemap"></i> ${escHtml(s.asn)}
+                                </span>
+                                <span class="ipr-banner-tag" style="background:var(--success-bg);color:var(--success)">
+                                    <i class="fas fa-building"></i> ${escHtml(s.provider_type)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ipr-banner-score">
+                        <div class="ipr-banner-score-value" style="color:${barColor}">${s.risk_score}</div>
+                        <div class="ipr-banner-score-label">/ 100 risk</div>
+                        <div class="ipr-banner-score-track">
+                            <div class="ipr-banner-score-fill" style="width:${s.risk_score}%;background:${barColor}"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ipr-stats-row">
+                    <div class="ipr-stat-card" style="background:${barBg}">
+                        <span class="ipr-stat-card-value" style="color:${barColor}">${s.risk_score}</span>
+                        <span class="ipr-stat-card-label">Risk Score</span>
+                    </div>
+                    <div class="ipr-stat-card" style="background:var(--info-bg)">
+                        <span class="ipr-stat-card-value" style="color:var(--info)">${escHtml(s.country_code || s.country)}</span>
+                        <span class="ipr-stat-card-label">Country</span>
+                    </div>
+                    <div class="ipr-stat-card" style="background:var(--accent-light)">
+                        <span class="ipr-stat-card-value" style="color:var(--accent);font-size:0.85rem">${escHtml(s.asn)}</span>
+                        <span class="ipr-stat-card-label">${escHtml(s.asname)}</span>
+                    </div>
+                    <div class="ipr-stat-card" style="background:var(--success-bg)">
+                        <span class="ipr-stat-card-value" style="color:var(--success);font-size:0.85rem">${escHtml(s.org)}</span>
+                        <span class="ipr-stat-card-label">${s.city ? escHtml(s.city) : 'Organization'}</span>
+                    </div>
+                </div>
+
+                <div class="ipr-toolbar">
+                    <button class="btn btn-sm btn-secondary" id="iprExportJson"><i class="fas fa-download"></i> Export JSON</button>
+                    <button class="btn btn-sm btn-secondary" id="iprExportPdf"><i class="fas fa-file-pdf"></i> Export PDF</button>
+                </div>
+
+                <div class="ipr-sections">
+                    ${renderSection('AbuseIPDB', getLevel(data.abuseipdb?.confidence_score), renderAbuseIpDbBody(data.abuseipdb))}
+                    ${renderSection('Spamhaus', data.spamhaus?.listed ? 'high' : 'low', renderSpamhausBody(data.spamhaus))}
+                    ${renderSection('VirusTotal', getLevel(data.virustotal?.malicious), renderVirusTotalBody(data.virustotal))}
+                    ${renderSection('TOR Exit Node', data.tor?.is_tor ? 'high' : 'low', renderTorBody(data.tor))}
+                    ${renderSection('Proxy / VPN', getProxyLevel(data.proxy_vpn), renderProxyVpnBody(data.proxy_vpn))}
+                    ${renderSection('ASN Information', 'low', renderAsnBody(data.asn))}
+                </div>
+
+                <div class="ipr-quick-actions">
+                    <div class="ipr-qa-title"><i class="fas fa-bolt"></i> Quick Actions</div>
+                    <div class="ipr-qa-grid">
+                        <a href="https://whois.domaintools.com/${data.ip}" target="_blank" rel="noopener" class="ipr-qa-btn">
+                            <i class="fas fa-circle-info"></i> Whois Lookup
+                        </a>
+                        <a href="https://dns.google/resolve?name=${data.ip}" target="_blank" rel="noopener" class="ipr-qa-btn">
+                            <i class="fas fa-arrows-spin"></i> Reverse DNS
+                        </a>
+                        <a href="https://www.ip2location.com/demo/${data.ip}" target="_blank" rel="noopener" class="ipr-qa-btn">
+                            <i class="fas fa-location-dot"></i> GeoIP Lookup
+                        </a>
+                        <a href="https://www.abuseipdb.com/check/${data.ip}" target="_blank" rel="noopener" class="ipr-qa-btn">
+                            <i class="fas fa-flag"></i> Abuse Report
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function getLevel(val) {
+        if (val == null) return 'warn';
+        if (val >= 80) return 'high';
+        if (val >= 30) return 'med';
+        if (val > 0) return 'med';
+        return 'low';
+    }
+
+    function getProxyLevel(pv) {
+        if (!pv) return 'warn';
+        if (pv.is_tor || pv.is_proxy || pv.is_vpn) return 'high';
+        if (pv.is_hosting) return 'med';
+        return 'low';
+    }
+
+    function badge(text, level) {
+        const lvl = level === 'high' ? 'high' : level === 'med' ? 'med' : 'low';
+        return `<span class="ipr-badge ipr-badge-${lvl}">${escHtml(text)}</span>`;
+    }
+
+    function hr(cls, label, value) {
+        return `<div class="hdr-row ${cls}"><span class="hdr-key">${label}</span><span class="hdr-val">${value}</span></div>`;
+    }
+
+    function renderSection(title, level, body) {
+        const lvl = level === 'high' ? 'high' : level === 'med' ? 'med' : 'low';
+        const icon = lvl === 'high' ? 'fa-circle-exclamation' : lvl === 'med' ? 'fa-triangle-exclamation' : 'fa-circle-check';
+        if (body.startsWith('{error}')) {
+            return `<div class="hdr-section"><div class="hdr-section-title"><i class="fas fa-triangle-exclamation"></i> ${title}</div><div class="hdr-table"><div class="hdr-row"><span class="hdr-key">Status</span><span class="hdr-val" style="color:var(--text-muted)">${escHtml(body.replace('{error}',''))}</span></div></div></div>`;
+        }
+        if (body.startsWith('{disabled}')) {
+            return `<div class="hdr-section"><div class="hdr-section-title"><i class="fas fa-key"></i> ${title}</div><div class="hdr-table"><div class="hdr-row"><span class="hdr-key">Status</span><span class="hdr-val" style="color:var(--warning)">${escHtml(body.replace('{disabled}',''))}</span></div></div></div>`;
+        }
+        return `
+            <div class="hdr-section">
+                <div class="hdr-section-title"><i class="fas ${icon}"></i> ${title}</div>
+                <div class="hdr-table">${body}</div>
+            </div>
+        `;
+    }
+
+    function renderAbuseIpDbBody(abuse) {
+        if (!abuse) return '{error}No data available.';
+        if (!abuse.enabled) return '{disabled}API key not configured. Add ABUSEIPDB_KEY to config.php.';
+        if (abuse.error) return '{error}' + abuse.error;
+        const lvl = abuse.confidence_score >= 80 ? 'high' : abuse.confidence_score >= 30 ? 'med' : 'low';
+        const cls = lvl === 'high' ? 'hdr-status-fail' : lvl === 'med' ? 'hdr-status-warn' : 'hdr-status-pass';
+        let h = hr(cls, 'Confidence Score', badge(abuse.confidence_score + '%', lvl));
+        h += hr('', 'Total Reports', String(abuse.total_reports));
+        h += hr('', 'Last Reported', abuse.last_reported_at ? new Date(abuse.last_reported_at).toLocaleString() : 'Never');
+        h += hr(cls, 'Status', badge(abuse.reputation_status, lvl));
+        if (abuse.is_whitelisted) h += hr('hdr-status-pass', 'Whitelisted', '<i class="fas fa-check-circle" style="color:var(--success)"></i> Yes');
+        return h;
+    }
+
+    function renderSpamhausBody(bl) {
+        if (!bl) return '{error}Check failed.';
+        if (bl.note) return '{error}' + bl.note;
+        if (!bl.listed) {
+            return hr('hdr-status-pass', 'Listed', '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> <strong>Not Listed</strong></span>');
+        }
+        let h = hr('hdr-status-fail', 'Listed', '<span style="color:var(--danger)"><i class="fas fa-times-circle"></i> <strong>BLACKLISTED</strong></span>');
+        if (bl.lists) bl.lists.forEach(l => { h += hr('', l.list, escHtml(l.description)); });
+        return h;
+    }
+
+    function renderVirusTotalBody(vt) {
+        if (!vt) return '{error}No data available.';
+        if (!vt.enabled) return '{disabled}API key not configured. Add VIRUSTOTAL_KEY to config.php.';
+        if (vt.error) return '{error}' + vt.error;
+        const lvl = vt.malicious > 0 ? 'high' : vt.suspicious > 0 ? 'med' : 'low';
+        const cls = lvl === 'high' ? 'hdr-status-fail' : lvl === 'med' ? 'hdr-status-warn' : 'hdr-status-pass';
+        let h = hr('', 'Reputation Score', String(vt.reputation_score));
+        h += hr(cls, 'Detection Ratio', badge(vt.detection_ratio, lvl));
+        h += hr('', 'Malicious', `<span style="color:${vt.malicious > 0 ? 'var(--danger)' : 'var(--text-muted)'};font-weight:700">${vt.malicious}</span> / ${vt.total_engines} engines`);
+        h += hr('', 'Suspicious', `<span style="color:${vt.suspicious > 0 ? 'var(--warning)' : 'var(--text-muted)'};font-weight:700">${vt.suspicious}</span>`);
+        h += hr('', 'Harmless', `<span style="color:var(--success);font-weight:700">${vt.harmless}</span>`);
+        if (vt.tags && vt.tags.length) {
+            h += hr('', 'Tags', vt.tags.map(t => `<span class="ipr-tag">${escHtml(t)}</span>`).join(' '));
+        }
+        return h;
+    }
+
+    function renderTorBody(tor) {
+        if (!tor) return '{error}Check failed.';
+        const isTor = tor.is_tor;
+        const cls = isTor ? 'hdr-status-fail' : 'hdr-status-pass';
+        const val = isTor
+            ? '<span style="color:var(--danger)"><i class="fas fa-times-circle"></i> <strong>Yes — TOR Exit Node</strong></span>'
+            : '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> <strong>No</strong></span>';
+        let h = hr(cls, 'TOR Exit Node', val);
+        h += hr('', 'Data Source', escHtml(tor.source || 'dan.me.uk'));
+        return h;
+    }
+
+    function renderProxyVpnBody(pv) {
+        if (!pv) return '{error}No data.';
+        const indicators = [];
+        if (pv.is_tor) indicators.push({ label: 'TOR Exit Node', level: 'high' });
+        if (pv.is_proxy) indicators.push({ label: 'Proxy', level: 'high' });
+        if (pv.is_vpn) indicators.push({ label: 'VPN', level: 'high' });
+        if (pv.is_hosting) indicators.push({ label: 'Hosting', level: 'med' });
+        if (pv.is_mobile) indicators.push({ label: 'Mobile', level: 'low' });
+        if (!indicators.length) indicators.push({ label: 'Residential ISP', level: 'low' });
+        const badges = indicators.map(i => badge(i.label, i.level)).join(' ');
+        const anyHigh = indicators.some(i => i.level === 'high');
+        const cls = anyHigh ? 'hdr-status-fail' : indicators.some(i => i.level === 'med') ? 'hdr-status-warn' : 'hdr-status-pass';
+        let h = hr(cls, 'Connection Type', badges);
+        h += hr('', 'Provider', escHtml(pv.provider));
+        h += hr('', 'Confidence', badge(pv.confidence, pv.confidence === 'high' ? 'high' : 'med'));
+        return h;
+    }
+
+    function renderAsnBody(asn) {
+        if (!asn || asn.error) return '{error}Could not resolve ASN information.';
+        let h = hr('', 'ASN', `<span class="font-mono" style="font-weight:700">${escHtml(asn.asn)}</span>`);
+        h += hr('', 'Organization', escHtml(asn.org));
+        h += hr('', 'ISP', escHtml(asn.isp));
+        h += hr('', 'Country', escHtml(asn.country));
+        h += hr('', 'City', escHtml(asn.city));
+        h += hr('', 'Provider Type', escHtml(asn.provider_type || 'N/A'));
+        if (asn.lat && asn.lon) h += hr('', 'Coordinates', escHtml(asn.lat + ', ' + asn.lon));
+        return h;
+    }
+
+    function attachIpResultEvents(data) {
+        document.getElementById('iprCopyBtn')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(data.ip).then(() => {
+                toast('IP copied to clipboard!', 'success');
+            }).catch(() => toast('Failed to copy.', 'error'));
+        });
+
+        document.getElementById('iprExportJson')?.addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ip-reputation-' + data.ip + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            toast('JSON exported!', 'success');
+        });
+
+        document.getElementById('iprExportPdf')?.addEventListener('click', () => {
+            window.print();
+        });
+    }
+
+    analyzeBtn.addEventListener('click', () => analyze(input.value));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') analyze(input.value); });
+    clearBtn.addEventListener('click', () => { input.value = ''; resultDiv.innerHTML = ''; input.focus(); });
+
+    document.querySelectorAll('.ipr-history-chip').forEach(chip => {
+        chip.addEventListener('click', () => { input.value = chip.dataset.ip; analyze(input.value); });
+    });
+    document.getElementById('iprHistoryClear')?.addEventListener('click', () => {
+        localStorage.removeItem('ip-history');
+        document.querySelector('.ipr-history')?.remove();
+        toast('History cleared.', 'info');
+    });
 }
 
 // ============================================
