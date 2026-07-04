@@ -33,6 +33,7 @@ switch ($method) {
         break;
 
     case 'POST':
+        require_admin();
         $body = get_json_body();
         $title = trim($body['title'] ?? '');
         $content = trim($body['content'] ?? '');
@@ -58,6 +59,7 @@ switch ($method) {
         break;
 
     case 'PUT':
+        require_admin();
         if (!$snippetId) {
             Response::error('Snippet ID required', 400);
         }
@@ -91,6 +93,7 @@ switch ($method) {
         break;
 
     case 'DELETE':
+        require_admin();
         if (!$snippetId) {
             Response::error('Snippet ID required', 400);
         }

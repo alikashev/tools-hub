@@ -17,6 +17,9 @@ define('APP_URL', 'http://your-domain.com');
 define('APP_ENV', 'development'); // development | production
 define('DEBUG', false);
 
+// Session lifetime (30 days)
+define('SESSION_LIFETIME', 30 * 24 * 3600);
+
 // Timezone
 date_default_timezone_set('UTC');
 

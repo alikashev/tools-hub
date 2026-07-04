@@ -30,6 +30,28 @@ function get_json_body(): array
     return is_array($data) ? $data : [];
 }
 
+function require_auth(): array
+{
+    if (empty($_SESSION['user_id'])) {
+        Response::error('Unauthorized', 401);
+    }
+    return [
+        'id' => (int) $_SESSION['user_id'],
+        'username' => $_SESSION['username'] ?? '',
+        'display_name' => $_SESSION['display_name'] ?? '',
+        'is_admin' => (bool) ($_SESSION['is_admin'] ?? false),
+    ];
+}
+
+function require_admin(): array
+{
+    $user = require_auth();
+    if (!$user['is_admin']) {
+        Response::error('Forbidden', 403);
+    }
+    return $user;
+}
+
 function get_route_parts(): array
 {
     $uri = $_SERVER['REQUEST_URI'];
@@ -39,8 +61,10 @@ function get_route_parts(): array
     // Strip the script's base directory so subdirectory installs work
     $scriptDir = dirname($_SERVER['SCRIPT_NAME']);
     if ($scriptDir !== '/' && $scriptDir !== '.') {
-        $path = substr($path, strlen($scriptDir));
-        $path = rtrim($path, '/');
+        if (str_starts_with($path, $scriptDir)) {
+            $path = substr($path, strlen($scriptDir));
+            $path = rtrim($path, '/');
+        }
     }
 
     // Strip leading /api if present
