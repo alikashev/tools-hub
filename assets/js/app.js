@@ -5,6 +5,12 @@
 const API_BASE = 'api';
 
 // ============================================
+// Auth State
+// ============================================
+let user = null;
+let appInited = false;
+
+// ============================================
 // State
 // ============================================
 const state = {
@@ -43,6 +49,72 @@ async function api(method, path, body = null) {
     }
 
     return data.data;
+}
+
+// ============================================
+// Auth API helper (no auth required)
+// ============================================
+async function authApi(method, path, body = null) {
+    const opts = {
+        method,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    };
+
+    if (body && method !== 'GET') {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+    }
+
+    const url = `${API_BASE}/auth/${path}`;
+
+    const res = await fetch(url, opts);
+    const data = await res.json();
+
+    if (!data.success) {
+        throw new Error(data.message || 'API Error');
+    }
+
+    return data.data;
+}
+
+// ============================================
+// Auth Functions
+// ============================================
+async function checkAuth() {
+    try {
+        user = await authApi('GET', 'me');
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function handleLogin(username, password) {
+    user = await authApi('POST', 'login', { username, password });
+    return user;
+}
+
+async function handleLogout() {
+    await authApi('POST', 'logout');
+    user = null;
+}
+
+async function handleRegister(username, email, password) {
+    user = await authApi('POST', 'register', { username, email, password });
+    return user;
+}
+
+function isAdmin() {
+    return user && user.is_admin === true;
+}
+
+function showLoginScreen() {
+    document.getElementById('loginScreen').classList.add('active');
+    document.getElementById('loginUsername').focus();
+}
+
+function hideLoginScreen() {
+    document.getElementById('loginScreen').classList.remove('active');
 }
 
 // ============================================
@@ -193,6 +265,17 @@ function renderNav() {
         },
     ];
 
+    if (isAdmin()) {
+        sections.push({
+            key: 'admin',
+            label: 'Administration',
+            icon: 'fa-shield-halved',
+            items: [
+                { view: 'users', icon: 'fa-users', label: 'Manage Users' },
+            ],
+        });
+    }
+
     sections.forEach(section => {
         const isOpen = navState.expanded[section.key] !== false;
         const hasActive = section.items.some(i => state.currentView === i.view);
@@ -264,6 +347,8 @@ function navigate(view) {
         renderSnippets();
     } else if (view === 'ip-reputation') {
         renderIpReputation();
+    } else if (view === 'users') {
+        renderUserManagement();
     }
 }
 
@@ -391,6 +476,8 @@ async function renderCommands() {
         state.commands = commands;
         state.categories = categories;
 
+        const admin = isAdmin();
+
         body.innerHTML = `
             <div class="toolbar">
                 <div class="toolbar-search-row">
@@ -398,18 +485,18 @@ async function renderCommands() {
                         <i class="fas fa-search"></i>
                         <input type="text" id="commandSearch" placeholder="Search commands..." autocomplete="off">
                     </div>
-                    <button class="btn btn-primary" id="addCommandBtn">
+                    ${admin ? `<button class="btn btn-primary" id="addCommandBtn">
                         <i class="fas fa-plus"></i> Add Command
-                    </button>
+                    </button>` : ''}
                 </div>
                 <div class="toolbar-filter-row">
                     <select class="filter-select" id="categoryFilter">
                         <option value="">All Categories</option>
                         ${categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
                     </select>
-                    <button class="btn btn-secondary" id="manageCategoriesBtn">
+                    ${admin ? `<button class="btn btn-secondary" id="manageCategoriesBtn">
                         <i class="fas fa-tags"></i> Manage
-                    </button>
+                    </button>` : ''}
                 </div>
             </div>
 
@@ -435,6 +522,8 @@ function renderCommandCards(commands) {
         `;
     }
 
+    const admin = isAdmin();
+
     return commands.map(cmd => {
         const catColor = cmd.category_color || '#6c757d';
         const catName = cmd.category_name || 'Uncategorized';
@@ -458,12 +547,13 @@ function renderCommandCards(commands) {
                     <button class="btn btn-copy copy-command" data-command="${escHtml(cmd.command)}">
                         <i class="fas fa-copy"></i> Copy
                     </button>
+                    ${admin ? `
                     <button class="btn btn-edit edit-command" data-id="${cmd.id}">
                         <i class="fas fa-pen"></i> Edit
                     </button>
                     <button class="btn btn-delete delete-command" data-id="${cmd.id}">
                         <i class="fas fa-trash"></i> Delete
-                    </button>
+                    </button>` : ''}
                 </div>
             </div>
         `;
@@ -481,9 +571,10 @@ function escHtml(str) {
 // Commands Events
 // ============================================
 function attachCommandEvents() {
-    document.getElementById('addCommandBtn').addEventListener('click', () => {
-        openCommandModal();
-    });
+    const addBtn = document.getElementById('addCommandBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => openCommandModal());
+    }
 
     const searchInput = document.getElementById('commandSearch');
     searchInput.addEventListener('input', () => {
@@ -499,9 +590,10 @@ function attachCommandEvents() {
         filterCommands();
     });
 
-    document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
-        openCategoryManagerModal();
-    });
+    const mgmtBtn = document.getElementById('manageCategoriesBtn');
+    if (mgmtBtn) {
+        mgmtBtn.addEventListener('click', () => openCategoryManagerModal());
+    }
 
     attachCommandCardEvents();
 }
@@ -1537,6 +1629,235 @@ function renderIpReputation() {
 }
 
 // ============================================
+// User Management (Admin only)
+// ============================================
+async function renderUserManagement() {
+    setPageTitle('Manage Users', 'Create and manage user accounts');
+
+    const body = document.getElementById('contentBody');
+    body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Loading users...</span></div>';
+
+    try {
+        const users = await api('GET', 'auth/users');
+
+        body.innerHTML = `
+            <div class="toolbar">
+                <div class="toolbar-search-row">
+                    <div class="search-input-wrap" style="max-width:320px">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="userSearch" placeholder="Search users..." autocomplete="off">
+                    </div>
+                    <button class="btn btn-primary" id="addUserBtn">
+                        <i class="fas fa-plus"></i> Add User
+                    </button>
+                </div>
+            </div>
+
+            <div class="users-grid" id="usersGrid">
+                ${renderUserCards(users)}
+            </div>
+
+            <!-- User Modal -->
+            <div class="modal-overlay" id="userModal">
+                <div class="modal modal-sm">
+                    <div class="modal-header">
+                        <h2 id="userModalTitle">Add User</h2>
+                        <button class="modal-close" data-modal="userModal">&times;</button>
+                    </div>
+                    <form id="userForm">
+                        <input type="hidden" name="id" id="userId">
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label for="userUsername">Username</label>
+                                <input type="text" id="userUsername" name="username" required placeholder="Choose a username">
+                            </div>
+                            <div class="form-group">
+                                <label for="userEmail">Email</label>
+                                <input type="email" id="userEmail" name="email" required placeholder="user@example.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="userPassword">Password <span class="text-muted">(leave blank to keep current)</span></label>
+                                <input type="password" id="userPassword" name="password" placeholder="At least 6 characters" autocomplete="new-password">
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="userIsAdmin" name="is_admin">
+                                    <span>Administrator</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="userIsActive" name="is_active" checked>
+                                    <span>Active</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-modal="userModal">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="userSubmitBtn">
+                                <i class="fas fa-plus"></i> Add User
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        const searchInput = document.getElementById('userSearch');
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.toLowerCase();
+            document.querySelectorAll('.user-card').forEach(card => {
+                const match = card.dataset.search && card.dataset.search.includes(q);
+                card.style.display = match ? '' : 'none';
+            });
+        });
+
+        document.getElementById('addUserBtn').addEventListener('click', () => openUserModal());
+
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const u = users.find(u => u.id == btn.dataset.id);
+                if (u) openUserModal(u);
+            });
+        });
+
+        document.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.addEventListener('click', () => confirmDeleteUser(btn.dataset.id, btn.dataset.username));
+        });
+
+        document.getElementById('userForm').addEventListener('submit', submitUserForm);
+
+        // Close modal events
+        initUserModalEvents();
+    } catch (err) {
+        body.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Failed to load users</h3><p>${err.message}</p></div>`;
+    }
+}
+
+function renderUserCards(users) {
+    if (!users.length) {
+        return `<div class="empty-state"><i class="fas fa-users"></i><h3>No users found</h3></div>`;
+    }
+
+    return users.map(u => `
+        <div class="user-card" data-id="${u.id}" data-search="${(u.username + ' ' + u.email).toLowerCase()}">
+            <div class="user-card-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="user-card-body">
+                <h3 class="user-card-name">${escHtml(u.display_name || u.username)}</h3>
+                <span class="user-card-username">@${escHtml(u.username)}</span>
+                <span class="user-card-email">${escHtml(u.email)}</span>
+            </div>
+            <div class="user-card-badges">
+                ${u.is_admin ? '<span class="user-badge admin-badge"><i class="fas fa-shield-halved"></i> Admin</span>' : '<span class="user-badge user-badge-user">User</span>'}
+                ${u.is_active ? '<span class="user-badge active-badge"><i class="fas fa-check-circle"></i> Active</span>' : '<span class="user-badge inactive-badge"><i class="fas fa-times-circle"></i> Inactive</span>'}
+            </div>
+            <div class="user-card-meta">
+                Joined ${new Date(u.created_at).toLocaleDateString()}
+            </div>
+            <div class="user-card-actions">
+                <button class="btn btn-edit edit-user-btn" data-id="${u.id}">
+                    <i class="fas fa-pen"></i> Edit
+                </button>
+                ${u.id !== user.id ? `<button class="btn btn-delete delete-user-btn" data-id="${u.id}" data-username="${escHtml(u.username)}">
+                    <i class="fas fa-trash"></i> Delete
+                </button>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function openUserModal(u = null) {
+    const modalTitle = document.getElementById('userModalTitle');
+    const submitBtn = document.getElementById('userSubmitBtn');
+    const form = document.getElementById('userForm');
+    form.reset();
+
+    document.getElementById('userId').value = '';
+    document.getElementById('userIsActive').checked = true;
+    document.getElementById('userIsAdmin').checked = false;
+    document.getElementById('userPassword').required = true;
+    document.getElementById('userPassword').placeholder = 'At least 6 characters';
+
+    document.querySelectorAll('[data-modal="userModal"]').forEach(el => {
+        el.removeEventListener('click', onUserModalClose);
+        el.addEventListener('click', onUserModalClose);
+    });
+
+    if (u) {
+        modalTitle.textContent = 'Edit User';
+        submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+        document.getElementById('userId').value = u.id;
+        document.getElementById('userUsername').value = u.username;
+        document.getElementById('userEmail').value = u.email;
+        document.getElementById('userIsAdmin').checked = u.is_admin;
+        document.getElementById('userIsActive').checked = u.is_active;
+        document.getElementById('userPassword').required = false;
+        document.getElementById('userPassword').placeholder = 'Leave blank to keep current';
+    } else {
+        modalTitle.textContent = 'Add User';
+        submitBtn.innerHTML = '<i class="fas fa-plus"></i> Add User';
+    }
+
+    openModal('userModal');
+}
+
+function onUserModalClose() {
+    closeModal('userModal');
+}
+
+function initUserModalEvents() {
+    const overlay = document.getElementById('userModal');
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal('userModal');
+    });
+}
+
+async function submitUserForm(e) {
+    e.preventDefault();
+    const id = document.getElementById('userId').value;
+    const data = {
+        username: document.getElementById('userUsername').value.trim(),
+        email: document.getElementById('userEmail').value.trim(),
+        is_admin: document.getElementById('userIsAdmin').checked,
+        is_active: document.getElementById('userIsActive').checked,
+    };
+
+    const password = document.getElementById('userPassword').value;
+    if (password) data.password = password;
+
+    const method = id ? 'PUT' : 'POST';
+    const path = id ? `auth/users/${id}` : 'auth/users';
+    const action = id ? 'updated' : 'created';
+
+    try {
+        await api(method, path, data);
+        closeModal('userModal');
+        toast(`User ${action} successfully!`, 'success');
+        renderUserManagement();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function confirmDeleteUser(id, username) {
+    const confirmed = await showConfirmModal(
+        `Delete user "${username}"? This action cannot be undone.`,
+        'Delete User'
+    );
+    if (!confirmed) return;
+
+    try {
+        await api('DELETE', `auth/users/${id}`);
+        toast('User deleted', 'success');
+        renderUserManagement();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// ============================================
 // Snippets
 // ============================================
 async function renderSnippets() {
@@ -1546,6 +1867,7 @@ async function renderSnippets() {
 
     try {
         const snippets = await api('GET', 'snippets');
+        const admin = isAdmin();
 
         body.innerHTML = `
             <div class="toolbar">
@@ -1554,9 +1876,9 @@ async function renderSnippets() {
                         <i class="fas fa-search"></i>
                         <input type="text" id="snippetSearch" placeholder="Search snippets..." autocomplete="off">
                     </div>
-                    <button class="btn btn-primary" id="addSnippetBtn">
+                    ${admin ? `<button class="btn btn-primary" id="addSnippetBtn">
                         <i class="fas fa-plus"></i> Add Snippet
-                    </button>
+                    </button>` : ''}
                 </div>
             </div>
 
@@ -1574,7 +1896,8 @@ async function renderSnippets() {
             });
         });
 
-        document.getElementById('addSnippetBtn').addEventListener('click', () => openSnippetModal());
+        const addBtn = document.getElementById('addSnippetBtn');
+        if (addBtn) addBtn.addEventListener('click', () => openSnippetModal());
 
         document.querySelectorAll('.edit-snippet').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1615,6 +1938,8 @@ function renderSnippetCards(snippets) {
         `;
     }
 
+    const admin = isAdmin();
+
     return snippets.map(s => `
         <div class="snippet-card" data-id="${s.id}" data-title="${escHtml(s.title).toLowerCase()}" data-content="${escHtml(s.content).toLowerCase()}">
             <div class="snippet-card-head">
@@ -1626,12 +1951,13 @@ function renderSnippetCards(snippets) {
                 <button class="btn btn-copy copy-snippet" data-id="${s.id}">
                     <i class="fas fa-copy"></i> Copy
                 </button>
+                ${admin ? `
                 <button class="btn btn-edit edit-snippet" data-id="${s.id}">
                     <i class="fas fa-pen"></i> Edit
                 </button>
                 <button class="btn btn-delete delete-snippet" data-id="${s.id}">
                     <i class="fas fa-trash"></i> Delete
-                </button>
+                </button>` : ''}
             </div>
         </div>
     `).join('');
@@ -2099,18 +2425,90 @@ function initKeyboard() {
 }
 
 // ============================================
-// Init
+// Login Form
 // ============================================
-document.addEventListener('DOMContentLoaded', async () => {
-    initTheme();
+function initLoginForm() {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const loginError = document.getElementById('loginError');
+    const registerError = document.getElementById('registerError');
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        loginError.textContent = '';
+        loginBtn.disabled = true;
+        loginBtn.classList.add('loading');
+
+        try {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            await handleLogin(username, password);
+            hideLoginScreen();
+            initApp();
+        } catch (err) {
+            loginError.textContent = err.message;
+            loginBtn.disabled = false;
+            loginBtn.classList.remove('loading');
+        }
+    });
+
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        registerError.textContent = '';
+        registerBtn.disabled = true;
+        registerBtn.classList.add('loading');
+
+        try {
+            const username = document.getElementById('regUsername').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            await handleRegister(username, email, password);
+            hideLoginScreen();
+            initApp();
+        } catch (err) {
+            registerError.textContent = err.message;
+            registerBtn.disabled = false;
+            registerBtn.classList.remove('loading');
+        }
+    });
+
+    document.getElementById('showRegisterLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        loginForm.style.display = 'none';
+        registerForm.style.display = 'block';
+        document.getElementById('registerLinkWrap').style.display = 'none';
+        loginError.textContent = '';
+    });
+
+    document.getElementById('backToLoginBtn').addEventListener('click', () => {
+        registerForm.style.display = 'none';
+        loginForm.style.display = 'block';
+        document.getElementById('registerLinkWrap').style.display = '';
+        registerError.textContent = '';
+    });
+
+    // Enter key on password field submits login
+    document.getElementById('loginPassword').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loginForm.dispatchEvent(new Event('submit'));
+    });
+}
+
+async function initApp() {
+    if (appInited) return;
+    appInited = true;
+
     initModals();
     initKeyboard();
-
-    // Sidebar init
     initSidebar();
-
-    // Theme toggle
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await handleLogout();
+        appInited = false;
+        document.getElementById('contentBody').innerHTML = '';
+        showLoginScreen();
+    });
 
     try {
         await loadModules();
@@ -2124,5 +2522,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">${err.message}</p>
             </div>
         `;
+    }
+}
+
+// ============================================
+// Init
+// ============================================
+document.addEventListener('DOMContentLoaded', async () => {
+    initTheme();
+    initLoginForm();
+
+    const authenticated = await checkAuth();
+    if (authenticated) {
+        hideLoginScreen();
+        initApp();
+    } else {
+        showLoginScreen();
+        // Check if registration is available (no users exist)
+        try {
+            // Try to hit me to see if we get a specific error about registration
+            // If we get 401, just show login
+        } catch {}
     }
 });

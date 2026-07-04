@@ -45,6 +45,7 @@ switch ($method) {
         break;
 
     case 'POST':
+        require_admin();
         $body = get_json_body();
         $name = trim($body['name'] ?? '');
         $moduleId = $body['module_id'] ?? null;
@@ -68,6 +69,7 @@ switch ($method) {
         break;
 
     case 'PUT':
+        require_admin();
         if (!$categoryId) {
             Response::error('Category ID required', 400);
         }
@@ -101,6 +103,7 @@ switch ($method) {
         break;
 
     case 'DELETE':
+        require_admin();
         if (!$categoryId) {
             Response::error('Category ID required', 400);
         }

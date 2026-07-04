@@ -43,6 +43,10 @@ $appName = APP_NAME;
 
             <div class="sidebar-footer">
                 <div class="version-badge">v1.0.0</div>
+                <button class="btn btn-ghost btn-sm" id="logoutBtn" title="Sign out">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Sign out</span>
+                </button>
             </div>
         </aside>
 
@@ -209,6 +213,65 @@ $appName = APP_NAME;
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Login Screen -->
+    <div class="login-overlay" id="loginScreen">
+        <div class="login-bg"></div>
+        <div class="login-card">
+            <div class="login-card-inner">
+                <div class="login-icon">
+                    <i class="fas fa-cubes"></i>
+                </div>
+                <h1 class="login-title"><?= $appName ?></h1>
+                <p class="login-subtitle">Sign in to access your tools</p>
+
+                <!-- Login Form -->
+                <form id="loginForm">
+                    <div class="login-field">
+                        <label for="loginUsername">Username or Email</label>
+                        <input type="text" id="loginUsername" name="username" placeholder="Enter your username" required autocomplete="username" spellcheck="false">
+                    </div>
+                    <div class="login-field">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" name="password" placeholder="Enter your password" required autocomplete="current-password">
+                    </div>
+                    <div class="login-error" id="loginError"></div>
+                    <button type="submit" class="login-btn login-btn-primary" id="loginBtn">
+                        <span class="login-btn-text">Sign In</span>
+                        <span class="login-btn-loading"><i class="fas fa-spinner fa-spin"></i></span>
+                    </button>
+                </form>
+
+                <p class="login-alt-link" id="registerLinkWrap">
+                    <a href="#" id="showRegisterLink">Create an admin account</a>
+                </p>
+
+                <!-- Register Form -->
+                <form id="registerForm" style="display:none">
+                    <div class="login-field">
+                        <label for="regUsername">Username</label>
+                        <input type="text" id="regUsername" name="username" placeholder="Choose a username" required autocomplete="off" spellcheck="false">
+                    </div>
+                    <div class="login-field">
+                        <label for="regEmail">Email</label>
+                        <input type="email" id="regEmail" name="email" placeholder="your@email.com" required autocomplete="off">
+                    </div>
+                    <div class="login-field">
+                        <label for="regPassword">Password</label>
+                        <input type="password" id="regPassword" name="password" placeholder="At least 6 characters" required autocomplete="new-password">
+                    </div>
+                    <div class="login-error" id="registerError"></div>
+                    <button type="submit" class="login-btn login-btn-primary" id="registerBtn">
+                        <span class="login-btn-text">Create Account</span>
+                        <span class="login-btn-loading"><i class="fas fa-spinner fa-spin"></i></span>
+                    </button>
+                    <button type="button" class="login-btn login-btn-secondary" id="backToLoginBtn">
+                        <i class="fas fa-arrow-left"></i> Back to Sign In
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 

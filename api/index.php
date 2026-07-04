@@ -12,13 +12,30 @@ require_once __DIR__ . '/../includes/functions.php';
 
 cors();
 
+// Session
+$sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : 30 * 24 * 3600;
+ini_set('session.gc_maxlifetime', $sessionLifetime);
+ini_set('session.cookie_lifetime', $sessionLifetime);
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_samesite', 'Lax');
+session_name('toolhub_session');
+session_start();
+
 $parts = get_route_parts();
 $resource = $parts[0] ?? null;
 
 define('API_ROUTER_ACTIVE', true);
 
 try {
+    // Require auth for all routes except auth
+    if ($resource !== 'auth') {
+        require_auth();
+    }
+
     switch ($resource) {
+        case 'auth':
+            require __DIR__ . '/auth.php';
+            break;
         case 'modules':
             require __DIR__ . '/modules.php';
             break;

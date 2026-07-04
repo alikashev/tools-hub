@@ -60,6 +60,7 @@ switch ($method) {
         break;
 
     case 'POST':
+        require_admin();
         $body = get_json_body();
         $title = trim($body['title'] ?? '');
         $command = trim($body['command'] ?? '');
@@ -88,6 +89,7 @@ switch ($method) {
         break;
 
     case 'PUT':
+        require_admin();
         if (!$commandId) {
             Response::error('Command ID required', 400);
         }
@@ -128,6 +130,7 @@ switch ($method) {
         break;
 
     case 'DELETE':
+        require_admin();
         if (!$commandId) {
             Response::error('Command ID required', 400);
         }
