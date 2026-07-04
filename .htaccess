@@ -1,3 +1,5 @@
+Require ip 185.109.220.5
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
