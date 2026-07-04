@@ -1,0 +1,27 @@
+<?php
+/**
+ * Tool Hub Configuration
+ *
+ * Copy this file to config.php and update the values.
+ */
+
+define('DB_HOST', 'localhost');
+define('DB_PORT', '3306');
+define('DB_NAME', 'admin_toolshub');
+define('DB_USER', 'admin_toolshub');
+define('DB_PASS', 'HfE54mVDACfh8GzE95Zz');
+define('DB_CHARSET', 'utf8mb4');
+
+define('APP_NAME', 'Tool Hub');
+define('APP_URL', 'http://akxx.nl');
+define('APP_ENV', 'production'); // development | production
+define('DEBUG', true);
+
+// Timezone
+date_default_timezone_set('UTC');
+
+// IP Reputation API Keys (optional — leave empty to skip those sources)
+// Get AbuseIPDB key: https://www.abuseipdb.com/register
+define('ABUSEIPDB_KEY', 'e3cabf1358ff5b8ba93069fcde42ad55395da880cd5e895054b3f9ff2c3022ba06afca6f9fc92048');
+// Get VirusTotal key: https://www.virustotal.com/gui/join-us
+define('VIRUSTOTAL_KEY', 'b7ad4686f9679748ba3e66e5f116f08fe5a48947202ffba8295b5e4a4ecb9e82');
