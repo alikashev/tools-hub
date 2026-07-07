@@ -256,6 +256,14 @@ function renderNav() {
             ],
         },
         {
+            key: 'editor-tools',
+            label: 'Editor',
+            icon: 'fa-pen-fancy',
+            items: [
+                { view: 'rte-editor', icon: 'fa-file-lines', label: 'Rich Text Editor' },
+            ],
+        },
+        {
             key: 'network-tools',
             label: 'Network Tools',
             icon: 'fa-globe',
@@ -345,6 +353,8 @@ function navigate(view) {
         renderEmailHeaderViz();
     } else if (view === 'snippets') {
         renderSnippets();
+    } else if (view === 'rte-editor') {
+        renderRichTextEditor();
     } else if (view === 'ip-reputation') {
         renderIpReputation();
     } else if (view === 'users') {
@@ -399,6 +409,13 @@ async function renderDashboard() {
                 name: 'IP Reputation',
                 desc: 'Analyze IP addresses for security and abuse history',
                 color: '#f59e0b',
+            },
+            {
+                key: 'rte-editor',
+                icon: 'fa-file-lines',
+                name: 'Rich Text Editor',
+                desc: 'Create and format rich text documents with templates and variables',
+                color: '#ec4899',
             },
         ];
 
@@ -2523,6 +2540,1608 @@ async function initApp() {
             </div>
         `;
     }
+}
+
+// ============================================
+// Rich Text Editor
+// ============================================
+
+const rteColors = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#6c63ff','#a855f7','#ec4899','#64748b'];
+const rteHighlights = ['#fef08a','#fde68a','#a7f3d0','#bfdbfe','#c4b5fd','#fbcfe8','#fecaca','#fed7aa','#e2e8f0'];
+const rteEmojis = ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😜','🤔','🤗','😩','😢','😭','😤','😡','🥺','😱','🤯','🥳','😴','👍','👎','👏','🙌','💪','🤝','✨','🔥','⭐','💡','📝','📌','🎯','🚀','✅','❌','❓','❗','💬','📧','🔗','🎉','💻','🖥️','📁','📂','📄','📅','⏰','🔒','🔓','💎','🌐','⚡','🎈','🏆','💯'];
+const rteFontSizes = ['8','10','12','14','16','18','20','24','28','32','36','48','64'];
+const rteFontFamilies = ['Arial','Georgia','Impact','Tahoma','Times New Roman','Trebuchet MS','Verdana','Courier New','Segoe UI','Inter'];
+
+const rteVars = ['{{customer_name}}','{{domain}}','{{ticket_id}}','{{customer_email}}','{{account_number}}','{{server_name}}','{{ip_address}}','{{billing_date}}','{{support_email}}','{{company_name}}'];
+
+let rteState = {
+    editor: null,
+    isFullscreen: false,
+    autoSaveTimer: null,
+    searchOpen: false,
+    templates: [],
+};
+
+function renderRichTextEditor() {
+    setPageTitle('Rich Text Editor', 'Format and create rich text documents');
+
+    const body = document.getElementById('contentBody');
+    rteState.templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');
+
+    body.innerHTML = `
+        <div class="rte-wrap" id="rteWrap">
+            <div class="rte-toolbar" id="rteToolbar">
+                <div class="rte-toolbar-group">
+                    <button class="rte-btn" data-cmd="bold" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i></button>
+                    <button class="rte-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i></button>
+                    <button class="rte-btn" data-cmd="underline" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i></button>
+                    <button class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
+                    <button class="rte-btn" data-cmd="code" title="Inline Code"><i class="fas fa-code"></i></button>
+                </div>
+                <div class="rte-toolbar-group">
+                    <select class="rte-select" id="rteHeadingSelect" title="Heading style">
+                        <option value="p">Paragraph</option>
+                        <option value="h1">H1</option>
+                        <option value="h2">H2</option>
+                        <option value="h3">H3</option>
+                        <option value="h4">H4</option>
+                        <option value="h5">H5</option>
+                        <option value="h6">H6</option>
+                    </select>
+                </div>
+                <div class="rte-toolbar-group">
+                    <select class="rte-select" id="rteFontSize" title="Font size">
+                        ${rteFontSizes.map(s => `<option value="${s}">${s}</option>`).join('')}
+                    </select>
+                    <select class="rte-select" id="rteFontFamily" title="Font family">
+                        ${rteFontFamilies.map(f => `<option value="${f}">${f}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="rte-toolbar-group">
+                    <button class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list"><i class="fas fa-list-ul"></i></button>
+                    <button class="rte-btn" data-cmd="insertOrderedList" title="Numbered list"><i class="fas fa-list-ol"></i></button>
+                    <button class="rte-btn" data-cmd="checklist" title="Checklist"><i class="fas fa-check-square"></i></button>
+                    <button class="rte-btn" data-cmd="blockquote" title="Blockquote"><i class="fas fa-quote-right"></i></button>
+                    <button class="rte-btn" data-cmd="codeblock" title="Code block"><i class="fas fa-terminal"></i></button>
+                </div>
+                <div class="rte-toolbar-group">
+                    <button class="rte-btn" data-cmd="justifyLeft" title="Align left"><i class="fas fa-align-left"></i></button>
+                    <button class="rte-btn" data-cmd="justifyCenter" title="Align center"><i class="fas fa-align-center"></i></button>
+                    <button class="rte-btn" data-cmd="justifyRight" title="Align right"><i class="fas fa-align-right"></i></button>
+                    <button class="rte-btn" data-cmd="justifyFull" title="Justify"><i class="fas fa-align-justify"></i></button>
+                </div>
+                <div class="rte-toolbar-group">
+                    <div style="position:relative">
+                        <button class="rte-btn" id="rteTextColorBtn" title="Text color"><i class="fas fa-palette"></i></button>
+                        <div class="rte-color-popup" id="rteTextColorPopup" style="display:none">
+                            <div class="rte-color-row">
+                                ${rteColors.map(c => `<div class="rte-color-swatch" data-color="${c}" style="background:${c}"></div>`).join('')}
+                            </div>
+                            <div class="rte-color-row">
+                                <input type="color" class="rte-color-input" id="rteTextColorInput" value="#e2e4f0">
+                                <button class="rte-color-clear" id="rteTextColorClear"><i class="fas fa-undo"></i> Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="position:relative">
+                        <button class="rte-btn" id="rteHighlightBtn" title="Highlight color"><i class="fas fa-highlighter"></i></button>
+                        <div class="rte-color-popup" id="rteHighlightPopup" style="display:none">
+                            <div class="rte-color-row">
+                                ${rteHighlights.map(c => `<div class="rte-color-swatch" data-hl="${c}" style="background:${c}"></div>`).join('')}
+                            </div>
+                            <div class="rte-color-row">
+                                <input type="color" class="rte-color-input" id="rteHighlightInput" value="#fef08a">
+                                <button class="rte-color-clear" id="rteHighlightClear"><i class="fas fa-undo"></i> Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="rte-toolbar-group">
+                    <button class="rte-btn" data-cmd="link" title="Insert link"><i class="fas fa-link"></i></button>
+                    <div style="position:relative">
+                        <button class="rte-btn" id="rteTableBtn" title="Insert table"><i class="fas fa-table"></i></button>
+                        <div class="rte-table-picker" id="rteTablePicker" style="display:none">
+                            <div class="rte-table-grid" id="rteTableGrid"></div>
+                            <div class="rte-table-label" id="rteTableLabel">1 x 1</div>
+                        </div>
+                    </div>
+                    <button class="rte-btn" data-cmd="image" title="Insert image"><i class="fas fa-image"></i></button>
+                    <button class="rte-btn" data-cmd="hr" title="Horizontal rule"><i class="fas fa-minus"></i></button>
+                    <div style="position:relative">
+                        <button class="rte-btn" id="rteEmojiBtn" title="Insert emoji"><i class="fas fa-smile"></i></button>
+                        <div class="rte-emojis-popup" id="rteEmojiPopup" style="display:none">
+                            ${rteEmojis.map(e => `<button class="rte-emoji-btn" data-emoji="${e}">${e}</button>`).join('')}
+                        </div>
+                    </div>
+                </div>
+                <div class="rte-toolbar-group">
+                    <button class="rte-btn" data-cmd="undo" title="Undo (Ctrl+Z)"><i class="fas fa-undo"></i></button>
+                    <button class="rte-btn" data-cmd="redo" title="Redo (Ctrl+Shift+Z)"><i class="fas fa-redo"></i></button>
+                    <button class="rte-btn" data-cmd="clearFormatting" title="Clear formatting"><i class="fas fa-eraser"></i></button>
+                </div>
+                <div class="rte-toolbar-group">
+                    <button class="rte-btn rte-btn-wide" data-cmd="fullscreen" title="Fullscreen"><i class="fas fa-expand"></i> <span class="rte-btn-label">Full</span></button>
+                </div>
+                <div class="rte-toolbar-group">
+                    <button class="rte-btn rte-btn-wide" data-cmd="search" title="Search & Replace"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+
+            <div class="rte-action-bar">
+                <span class="rte-action-label"><i class="fas fa-copy"></i> Copy:</span>
+                <button class="rte-btn-copy-all" id="rteCopyAllBtn">
+                    <i class="fas fa-copy"></i> Copy All (with formatting)
+                </button>
+                <button class="rte-btn-copy-plain" id="rteCopyPlainBtn">
+                    <i class="fas fa-file-lines"></i> Plain Text
+                </button>
+                <div class="rte-export-group">
+                    <button class="rte-export-btn" id="rteExportHtmlBtn"><i class="fas fa-code"></i> HTML</button>
+                    <button class="rte-export-btn" id="rteExportMdBtn"><i class="fas fa-markdown"></i> MD</button>
+                    <button class="rte-export-btn" id="rteExportTxtBtn"><i class="fas fa-file-export"></i> TXT</button>
+                </div>
+            </div>
+
+            <div class="rte-variables-bar">
+                <span class="rte-variables-label"><i class="fas fa-at"></i> Vars:</span>
+                ${rteVars.map(v => `<button class="rte-var-btn" data-var="${v}"><code>${v}</code></button>`).join('')}
+            </div>
+
+            <div class="rte-templates-bar" id="rteTemplatesBar">
+                <span class="rte-variables-label"><i class="fas fa-reply"></i> Templates:</span>
+                <button class="rte-template-btn" id="rteSaveTemplateBtn"><i class="fas fa-floppy-disk"></i> Save as template</button>
+                <span id="rteTemplateList"></span>
+            </div>
+
+            <div class="rte-search-bar" id="rteSearchBar" style="display:none">
+                <input type="text" class="rte-search-input" id="rteSearchInput" placeholder="Search...">
+                <input type="text" class="rte-search-input" id="rteReplaceInput" placeholder="Replace with...">
+                <button class="rte-search-btn" id="rteSearchPrev" title="Previous"><i class="fas fa-chevron-up"></i></button>
+                <button class="rte-search-btn" id="rteSearchNext" title="Next"><i class="fas fa-chevron-down"></i></button>
+                <button class="rte-search-btn" id="rteSearchReplaceOne" title="Replace"><i class="fas fa-exchange-alt"></i></button>
+                <button class="rte-search-btn" id="rteSearchReplaceAll" title="Replace all"><i class="fas fa-forward"></i></button>
+                <span class="rte-search-count" id="rteSearchCount"></span>
+                <button class="rte-search-close" id="rteSearchClose">&times;</button>
+            </div>
+
+            <div class="rte-editor-wrapper">
+                <div class="rte-editor" id="rteEditor" contenteditable="true" data-placeholder="Start typing or paste your content here..."></div>
+                <div class="rte-status-bar">
+                    <div class="rte-status-left">
+                        <span class="rte-status-item" id="rteWordCount"><i class="fas fa-pen"></i> 0 words</span>
+                        <span class="rte-status-item" id="rteCharCount"><i class="fas fa-text-height"></i> 0 chars</span>
+                    </div>
+                    <div class="rte-status-right">
+                        <span class="rte-status-item" id="rteLineCount"><i class="fas fa-bars"></i> 0 lines</span>
+                        <span class="rte-saved-indicator" id="rteSavedIndicator"><i class="fas fa-check-circle"></i> Saved</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    rteInit();
+}
+
+function rteInit() {
+    rteState.editor = document.getElementById('rteEditor');
+
+    rteLoadContent();
+    rteInitToolbar();
+    rteInitEditorEvents();
+    rteInitImageObserver();
+    rteRenderTemplates();
+    rteUpdateStats();
+}
+
+function rteInitToolbar() {
+    // Toolbar command buttons
+    document.querySelectorAll('.rte-btn[data-cmd]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const cmd = btn.dataset.cmd;
+            rteHandleCommand(cmd);
+        });
+    });
+
+    // Heading select
+    document.getElementById('rteHeadingSelect').addEventListener('change', function() {
+        const val = this.value;
+        if (val === 'p') {
+            document.execCommand('formatBlock', false, 'p');
+        } else {
+            document.execCommand('formatBlock', false, `<${val}>`);
+        }
+        rteState.editor.focus();
+        rteScheduleAutoSave();
+    });
+
+    // Font size
+    document.getElementById('rteFontSize').addEventListener('change', function() {
+        document.execCommand('fontSize', false, this.value);
+        rteState.editor.focus();
+        rteScheduleAutoSave();
+    });
+
+    // Font family
+    document.getElementById('rteFontFamily').addEventListener('change', function() {
+        document.execCommand('fontName', false, this.value);
+        rteState.editor.focus();
+        rteScheduleAutoSave();
+    });
+
+    // Text color
+    const textColorBtn = document.getElementById('rteTextColorBtn');
+    const textColorPopup = document.getElementById('rteTextColorPopup');
+
+    textColorBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        rteCloseAllPopups(textColorPopup);
+        textColorPopup.style.display = textColorPopup.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('#rteTextColorPopup .rte-color-swatch').forEach(el => {
+        el.addEventListener('click', () => {
+            document.execCommand('foreColor', false, el.dataset.color);
+            textColorPopup.style.display = 'none';
+            rteState.editor.focus();
+        });
+    });
+
+    document.getElementById('rteTextColorInput').addEventListener('input', function() {
+        document.execCommand('foreColor', false, this.value);
+    });
+
+    document.getElementById('rteTextColorClear').addEventListener('click', () => {
+        document.execCommand('foreColor', false, '#e2e4f0');
+        textColorPopup.style.display = 'none';
+        rteState.editor.focus();
+    });
+
+    // Highlight color
+    const hlBtn = document.getElementById('rteHighlightBtn');
+    const hlPopup = document.getElementById('rteHighlightPopup');
+
+    hlBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        rteCloseAllPopups(hlPopup);
+        hlPopup.style.display = hlPopup.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('#rteHighlightPopup .rte-color-swatch').forEach(el => {
+        el.addEventListener('click', () => {
+            document.execCommand('backColor', false, el.dataset.hl);
+            hlPopup.style.display = 'none';
+            rteState.editor.focus();
+        });
+    });
+
+    document.getElementById('rteHighlightInput').addEventListener('input', function() {
+        document.execCommand('backColor', false, this.value);
+    });
+
+    document.getElementById('rteHighlightClear').addEventListener('click', () => {
+        document.execCommand('backColor', false, 'transparent');
+        hlPopup.style.display = 'none';
+        rteState.editor.focus();
+    });
+
+    // Link
+    document.querySelector('[data-cmd="link"]')?.addEventListener('click', rteInsertLink);
+
+    // Image
+    document.querySelector('[data-cmd="image"]')?.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => rteInsertImage(ev.target.result, file.name);
+                reader.readAsDataURL(file);
+            }
+        };
+        input.click();
+    });
+
+    // HR
+    document.querySelector('[data-cmd="hr"]')?.addEventListener('click', () => {
+        document.execCommand('insertHorizontalRule', false, null);
+        rteScheduleAutoSave();
+    });
+
+    // Emoji picker
+    const emojiBtn = document.getElementById('rteEmojiBtn');
+    const emojiPopup = document.getElementById('rteEmojiPopup');
+
+    emojiBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        rteCloseAllPopups(emojiPopup);
+        emojiPopup.style.display = emojiPopup.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('.rte-emoji-btn').forEach(el => {
+        el.addEventListener('click', () => {
+            document.execCommand('insertText', false, el.dataset.emoji);
+            emojiPopup.style.display = 'none';
+            rteState.editor.focus();
+        });
+    });
+
+    // Table picker
+    const tableBtn = document.getElementById('rteTableBtn');
+    const tablePicker = document.getElementById('rteTablePicker');
+    const tableGrid = document.getElementById('rteTableGrid');
+    const tableLabel = document.getElementById('rteTableLabel');
+
+    tableBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        rteCloseAllPopups(tablePicker);
+        tablePicker.style.display = tablePicker.style.display === 'none' ? 'block' : 'none';
+    });
+
+    let tableRows = 1, tableCols = 1;
+    function renderTableGrid() {
+        tableGrid.innerHTML = '';
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const cell = document.createElement('div');
+                cell.className = `rte-table-cell ${r < tableRows && c < tableCols ? 'active' : ''}`;
+                cell.dataset.row = r + 1;
+                cell.dataset.col = c + 1;
+                cell.addEventListener('click', () => {
+                    rteInsertTable(parseInt(cell.dataset.row), parseInt(cell.dataset.col));
+                    tablePicker.style.display = 'none';
+                });
+                cell.addEventListener('mouseenter', () => {
+                    tableRows = parseInt(cell.dataset.row);
+                    tableCols = parseInt(cell.dataset.col);
+                    tableLabel.textContent = `${tableRows} x ${tableCols}`;
+                    renderTableGrid();
+                });
+                tableGrid.appendChild(cell);
+            }
+        }
+    }
+    renderTableGrid();
+
+    // Variable buttons
+    document.querySelectorAll('.rte-var-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.execCommand('insertText', false, btn.dataset.var);
+            rteState.editor.focus();
+            rteScheduleAutoSave();
+        });
+    });
+
+    // Copy All (with formatting) — the big button
+    document.getElementById('rteCopyAllBtn').addEventListener('click', rteCopyFormatted);
+
+    // Copy plain text
+    document.getElementById('rteCopyPlainBtn').addEventListener('click', rteCopyPlainText);
+
+    // Export HTML
+    document.getElementById('rteExportHtmlBtn').addEventListener('click', rteExportHTML);
+
+    // Export Markdown
+    document.getElementById('rteExportMdBtn').addEventListener('click', rteExportMarkdown);
+
+    // Export Plain Text
+    document.getElementById('rteExportTxtBtn').addEventListener('click', rteExportPlainText);
+
+    // Save template
+    document.getElementById('rteSaveTemplateBtn').addEventListener('click', rteSaveTemplate);
+
+    // Search & Replace
+    const searchBtn = document.querySelector('[data-cmd="search"]');
+    const searchBar = document.getElementById('rteSearchBar');
+    searchBtn.addEventListener('click', () => {
+        rteSearchOpen();
+    });
+
+    document.getElementById('rteSearchClose').addEventListener('click', rteSearchClose);
+    document.getElementById('rteSearchInput').addEventListener('input', rteSearchDo);
+    document.getElementById('rteSearchInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); rteSearchNext(); }
+    });
+    document.getElementById('rteReplaceInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); rteSearchReplace(); }
+    });
+    document.getElementById('rteSearchNext').addEventListener('click', rteSearchNext);
+    document.getElementById('rteSearchPrev').addEventListener('click', rteSearchPrev);
+    document.getElementById('rteSearchReplaceOne').addEventListener('click', rteSearchReplace);
+    document.getElementById('rteSearchReplaceAll').addEventListener('click', rteSearchReplaceAll);
+
+    // Click outside to close popups
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.rte-color-popup') && !e.target.closest('.rte-emojis-popup') && !e.target.closest('.rte-table-picker')) {
+            document.querySelectorAll('.rte-color-popup, .rte-emojis-popup, .rte-table-picker, .rte-link-popup').forEach(p => p.style.display = 'none');
+        }
+    });
+}
+
+function rteCloseAllPopups(except) {
+    document.querySelectorAll('.rte-color-popup, .rte-emojis-popup, .rte-table-picker').forEach(p => {
+        if (p !== except) p.style.display = 'none';
+    });
+}
+
+function rteHandleCommand(cmd) {
+    const ed = rteState.editor;
+    ed.focus();
+
+    switch (cmd) {
+        case 'bold':
+        case 'italic':
+        case 'underline':
+        case 'strikeThrough':
+            document.execCommand(cmd, false, null);
+            break;
+        case 'code':
+            document.execCommand('insertHTML', false, '<code>\u200B</code>');
+            break;
+        case 'insertUnorderedList':
+        case 'insertOrderedList':
+            document.execCommand(cmd, false, null);
+            break;
+        case 'checklist':
+            rteInsertChecklist();
+            break;
+        case 'blockquote':
+            document.execCommand('formatBlock', false, 'blockquote');
+            break;
+        case 'codeblock':
+            document.execCommand('insertHTML', false, '<pre><code>\n\n</code></pre>');
+            break;
+        case 'justifyLeft':
+        case 'justifyCenter':
+        case 'justifyRight':
+        case 'justifyFull':
+            document.execCommand(cmd, false, null);
+            break;
+        case 'undo':
+            document.execCommand('undo', false, null);
+            break;
+        case 'redo':
+            document.execCommand('redo', false, null);
+            break;
+        case 'clearFormatting':
+            rteClearFormatting();
+            break;
+        case 'fullscreen':
+            rteToggleFullscreen();
+            return;
+        case 'search':
+            rteSearchOpen();
+            return;
+        case 'link':
+            rteInsertLink();
+            return;
+        default:
+            return;
+    }
+
+    rteScheduleAutoSave();
+    rteUpdateStats();
+}
+
+function rteInitEditorEvents() {
+    const ed = rteState.editor;
+
+    ed.addEventListener('input', () => {
+        rteUpdateStats();
+        rteScheduleAutoSave();
+    });
+
+    ed.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            document.execCommand('insertHTML', false, '    ');
+        }
+    });
+
+    // Selection change for toolbar state
+    document.addEventListener('selectionchange', rteUpdateToolbarState);
+
+    // Paste handling
+    ed.addEventListener('paste', rteHandlePaste);
+
+    // Drag & drop for images
+    ed.addEventListener('dragover', (e) => e.preventDefault());
+    ed.addEventListener('drop', rteHandleDrop);
+
+    // Keyboard shortcuts
+    ed.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'b') { e.preventDefault(); rteHandleCommand('bold'); }
+        if (e.ctrlKey && e.key === 'i') { e.preventDefault(); rteHandleCommand('italic'); }
+        if (e.ctrlKey && e.key === 'u') { e.preventDefault(); rteHandleCommand('underline'); }
+        if (e.ctrlKey && e.key === 'z') {
+            if (e.shiftKey) { e.preventDefault(); rteHandleCommand('redo'); }
+            else { e.preventDefault(); rteHandleCommand('undo'); }
+        }
+        if (e.ctrlKey && e.key === 'y') { e.preventDefault(); rteHandleCommand('redo'); }
+        if (e.ctrlKey && e.key === 'k') { e.preventDefault(); rteInsertLink(); }
+        if (e.ctrlKey && e.key === 'f') { e.preventDefault(); rteSearchOpen(); }
+    });
+
+    // Auto-save on blur
+    ed.addEventListener('blur', () => rteSaveNow());
+
+    rteUpdateStats();
+}
+
+// ── Image resize ──
+
+let rteImgObserver = null;
+let rteSelectedBox = null;
+let rteHandleEl = null;
+let rteBadgeEl = null;
+let rteResizeActive = false;
+
+function rteInitImageObserver() {
+    if (rteImgObserver) rteImgObserver.disconnect();
+    rteImgObserver = new MutationObserver(() => rteWrapImages());
+    rteImgObserver.observe(rteState.editor, { childList: true, subtree: true });
+    rteWrapImages();
+}
+
+function rteWrapImages() {
+    if (!rteState.editor) return;
+    rteState.editor.querySelectorAll('img:not(.rte-wrapped)').forEach(img => {
+        if (img.closest('.rte-img-box')) return;
+        const box = document.createElement('span');
+        box.className = 'rte-img-box';
+        img.classList.add('rte-wrapped');
+        img.parentNode.insertBefore(box, img);
+        box.appendChild(img);
+    });
+}
+
+// Click on img-box to select, click elsewhere to deselect
+document.addEventListener('mousedown', function(e) {
+    if (!rteState.editor) return;
+    const box = e.target.closest('.rte-img-box');
+    if (box && rteState.editor.contains(box)) {
+        rteSelectBox(box);
+        e.preventDefault();
+        return;
+    }
+    if (rteSelectedBox) rteDeselectBox();
+});
+
+function rteSelectBox(box) {
+    if (rteSelectedBox === box) return;
+    rteDeselectBox();
+    rteSelectedBox = box;
+    box.classList.add('selected');
+
+    rteHandleEl = document.createElement('div');
+    rteHandleEl.className = 'rte-img-resize-handle';
+    rteHandleEl.addEventListener('mousedown', rteStartResize);
+    document.body.appendChild(rteHandleEl);
+
+    rteBadgeEl = document.createElement('div');
+    rteBadgeEl.className = 'rte-img-size-badge';
+    document.body.appendChild(rteBadgeEl);
+
+    rteUpdateOverlay();
+}
+
+function rteDeselectBox() {
+    if (rteSelectedBox) {
+        rteSelectedBox.classList.remove('selected');
+        rteSelectedBox = null;
+    }
+    if (rteHandleEl) {
+        rteHandleEl.removeEventListener('mousedown', rteStartResize);
+        rteHandleEl.remove();
+        rteHandleEl = null;
+    }
+    if (rteBadgeEl) {
+        rteBadgeEl.remove();
+        rteBadgeEl = null;
+    }
+    rteResizeActive = false;
+}
+
+function rteUpdateOverlay() {
+    if (!rteSelectedBox) return;
+    const img = rteSelectedBox.querySelector('img');
+    if (!img) return;
+    const ir = img.getBoundingClientRect();
+    if (rteHandleEl) {
+        rteHandleEl.style.left = (ir.right - 9) + 'px';
+        rteHandleEl.style.top = (ir.bottom - 9) + 'px';
+    }
+    if (rteBadgeEl) {
+        rteBadgeEl.textContent = img.width + ' × ' + img.height + ' px';
+        rteBadgeEl.style.left = (ir.left + ir.width / 2) + 'px';
+        rteBadgeEl.style.top = (ir.bottom + 10) + 'px';
+    }
+}
+
+document.addEventListener('scroll', rteUpdateOverlay, true);
+window.addEventListener('resize', rteUpdateOverlay);
+
+function rteStartResize(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!rteSelectedBox) return;
+    rteResizeActive = true;
+    const box = rteSelectedBox;
+    const img = box.querySelector('img');
+    if (!img) return;
+    const startX = e.clientX;
+    const startW = box.offsetWidth;
+    const aspect = img.naturalHeight / img.naturalWidth || 1;
+    img.style.height = 'auto';
+
+    function onMove(ev) {
+        if (!rteResizeActive || !rteSelectedBox) return;
+        const dx = ev.clientX - startX;
+        let newW = Math.max(60, startW + dx);
+        box.style.width = newW + 'px';
+        rteUpdateOverlay();
+    }
+
+    function onUp() {
+        rteResizeActive = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+function rteUpdateToolbarState() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+
+    // Update heading select
+    const headingSelect = document.getElementById('rteHeadingSelect');
+    let node = sel.focusNode;
+    if (node) {
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+        while (node && node !== rteState.editor) {
+            const tag = node.tagName ? node.tagName.toLowerCase() : '';
+            if (['h1','h2','h3','h4','h5','h6','p','blockquote','pre'].includes(tag)) {
+                headingSelect.value = tag;
+                break;
+            }
+            node = node.parentElement;
+        }
+        if (node === rteState.editor) headingSelect.value = 'p';
+    }
+
+    // Update active states for formatting buttons
+    const cmds = ['bold','italic','underline','strikeThrough'];
+    cmds.forEach(cmd => {
+        const active = document.queryCommandState(cmd);
+        document.querySelectorAll(`[data-cmd="${cmd}"]`).forEach(btn => {
+            btn.classList.toggle('active', active);
+        });
+    });
+
+    // Check alignment
+    const alignCmds = ['justifyLeft','justifyCenter','justifyRight','justifyFull'];
+    alignCmds.forEach(cmd => {
+        const active = document.queryCommandState(cmd);
+        document.querySelectorAll(`[data-cmd="${cmd}"]`).forEach(btn => {
+            btn.classList.toggle('active', active);
+        });
+    });
+
+    // Check lists
+    const listCmds = ['insertUnorderedList','insertOrderedList'];
+    listCmds.forEach(cmd => {
+        const active = document.queryCommandState(cmd);
+        document.querySelectorAll(`[data-cmd="${cmd}"]`).forEach(btn => {
+            btn.classList.toggle('active', active);
+        });
+    });
+}
+
+function rteClearFormatting() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+
+    if (range.collapsed) return;
+
+    // Remove inline styles from selected content
+    const ancestor = range.commonAncestorContainer;
+    const ed = rteState.editor;
+    const walker = document.createTreeWalker(
+        range.commonAncestorContainer,
+        NodeFilter.SHOW_ELEMENT,
+        {
+            acceptNode: (n) => {
+                return range.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+        }
+    );
+
+    // Remove inline styles from selected nodes
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    nodes.forEach(n => {
+        if (n.nodeType === Node.ELEMENT_NODE) {
+            n.removeAttribute('style');
+            if (['B','I','U','S','STRONG','EM'].includes(n.tagName)) {
+                const parent = n.parentNode;
+                while (n.firstChild) parent.insertBefore(n.firstChild, n);
+                parent.removeChild(n);
+            }
+        }
+    });
+
+    document.execCommand('removeFormat', false, null);
+    rteScheduleAutoSave();
+    rteUpdateStats();
+}
+
+function rteInsertLink() {
+    const sel = window.getSelection();
+    const selectedText = sel.toString().trim() || '';
+
+    // Create a popup
+    const existingPopup = document.querySelector('.rte-link-popup');
+    if (existingPopup) existingPopup.remove();
+
+    const popup = document.createElement('div');
+    popup.className = 'rte-link-popup';
+    popup.style.display = 'block';
+    popup.innerHTML = `
+        <div class="rte-link-input-group">
+            <input type="text" class="rte-link-input" id="rteLinkUrl" placeholder="https://..." value="https://">
+        </div>
+        <div class="rte-link-input-group">
+            <input type="text" class="rte-link-input" id="rteLinkText" placeholder="Display text (optional)" value="${escHtml(selectedText)}">
+            <button class="rte-link-btn" id="rteLinkApply">Apply</button>
+        </div>
+    `;
+
+    const linkBtn = document.querySelector('[data-cmd="link"]');
+    linkBtn.parentElement.appendChild(popup);
+
+    const urlInput = popup.querySelector('#rteLinkUrl');
+    const textInput = popup.querySelector('#rteLinkText');
+    const applyBtn = popup.querySelector('#rteLinkApply');
+
+    urlInput.focus();
+    urlInput.select();
+
+    function insertLink() {
+        let url = urlInput.value.trim();
+        let text = textInput.value.trim();
+
+        if (!url) { popup.remove(); return; }
+        if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('mailto:')) {
+            url = 'https://' + url;
+        }
+
+        if (selectedText) {
+            // Replace selection with link
+            document.execCommand('insertHTML', false, `<a href="${escHtml(url)}" target="_blank">${escHtml(text || url)}</a>`);
+        } else {
+            // Insert a new link
+            document.execCommand('insertHTML', false, `<a href="${escHtml(url)}" target="_blank">${escHtml(text || url)}</a>`);
+        }
+
+        popup.remove();
+        rteState.editor.focus();
+        rteScheduleAutoSave();
+    }
+
+    applyBtn.addEventListener('click', insertLink);
+    urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); insertLink(); } });
+    textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); insertLink(); } });
+
+    // Close on click outside
+    setTimeout(() => {
+        document.addEventListener('click', function linkPopupClose(e) {
+            if (!e.target.closest('.rte-link-popup') && !e.target.closest('[data-cmd="link"]')) {
+                popup.remove();
+                document.removeEventListener('click', linkPopupClose);
+            }
+        });
+    }, 0);
+}
+
+function rteInsertTable(rows, cols) {
+    let html = '<table><tbody>';
+    for (let r = 0; r < rows; r++) {
+        html += '<tr>';
+        for (let c = 0; c < cols; c++) {
+            const tag = r === 0 ? 'th' : 'td';
+            html += `<${tag}><br></${tag}>`;
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table><p><br></p>';
+    document.execCommand('insertHTML', false, html);
+    rteState.editor.focus();
+    rteScheduleAutoSave();
+}
+
+function rteInsertChecklist() {
+    const html = '<ul data-type="checklist"><li><input class="rte-checkbox" type="checkbox"> Task item</li></ul>';
+    document.execCommand('insertHTML', false, html);
+    rteState.editor.focus();
+    rteScheduleAutoSave();
+}
+
+function rteInsertImage(src, alt) {
+    const html = `<img src="${escHtml(src)}" alt="${escHtml(alt || '')}" loading="lazy">`;
+    document.execCommand('insertHTML', false, html);
+    rteState.editor.focus();
+    rteScheduleAutoSave();
+}
+
+function rteHandlePaste(e) {
+    e.preventDefault();
+    const items = e.clipboardData.items;
+    let hasImage = false;
+
+    // Check for image paste
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+            hasImage = true;
+            const file = items[i].getAsFile();
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => rteInsertImage(ev.target.result, file.name);
+                reader.readAsDataURL(file);
+            }
+            return;
+        }
+    }
+
+    // Paste as plain text by default
+    const text = e.clipboardData.getData('text/plain');
+    if (text) {
+        document.execCommand('insertText', false, text);
+    }
+    rteScheduleAutoSave();
+}
+
+function rteHandleDrop(e) {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (ev) => rteInsertImage(ev.target.result, files[i].name);
+                reader.readAsDataURL(files[i]);
+            }
+        }
+    }
+}
+
+function rteUpdateStats() {
+    const ed = rteState.editor;
+    const text = ed.textContent || '';
+
+    const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const charCount = text.length;
+    const lineCount = Math.max(1, ed.innerHTML.split('<br>').length + ed.innerHTML.split('</p>').length - 1);
+
+    document.getElementById('rteWordCount').innerHTML = `<i class="fas fa-pen"></i> ${wordCount} word${wordCount !== 1 ? 's' : ''}`;
+    document.getElementById('rteCharCount').innerHTML = `<i class="fas fa-text-height"></i> ${charCount} char${charCount !== 1 ? 's' : ''}`;
+    document.getElementById('rteLineCount').innerHTML = `<i class="fas fa-bars"></i> ${lineCount} line${lineCount !== 1 ? 's' : ''}`;
+}
+
+function rteScheduleAutoSave() {
+    clearTimeout(rteState.autoSaveTimer);
+    rteState.autoSaveTimer = setTimeout(rteSaveNow, 1500);
+}
+
+function rteSaveNow() {
+    const ed = rteState.editor;
+    if (!ed) return;
+    localStorage.setItem('rte-content', ed.innerHTML);
+    const indicator = document.getElementById('rteSavedIndicator');
+    if (indicator) {
+        indicator.innerHTML = '<i class="fas fa-check-circle" style="color:var(--success)"></i> Saved';
+        clearTimeout(indicator._resetTimer);
+        indicator._resetTimer = setTimeout(() => {
+            indicator.innerHTML = '<i class="fas fa-check-circle"></i> Saved';
+        }, 3000);
+    }
+}
+
+function rteLoadContent() {
+    const ed = rteState.editor;
+    const saved = localStorage.getItem('rte-content');
+    if (saved && saved.trim()) {
+        ed.innerHTML = saved;
+    } else {
+        ed.innerHTML = '<p>Start typing or paste your content here...</p>';
+    }
+}
+
+function rteSaveContent() {
+    localStorage.setItem('rte-content', rteState.editor.innerHTML);
+}
+
+function rteToggleFullscreen() {
+    rteState.isFullscreen = !rteState.isFullscreen;
+    document.body.classList.toggle('rte-fullscreen', rteState.isFullscreen);
+    const icon = document.querySelector('[data-cmd="fullscreen"] i');
+    if (rteState.isFullscreen) {
+        icon.className = 'fas fa-compress';
+        setTimeout(() => rteState.editor.focus(), 100);
+    } else {
+        icon.className = 'fas fa-expand';
+    }
+}
+
+// ============================================
+// Search & Replace
+// ============================================
+
+let rteSearchMatches = [];
+let rteSearchCurrentIdx = -1;
+
+function rteSearchOpen() {
+    const bar = document.getElementById('rteSearchBar');
+    bar.style.display = 'flex';
+    document.getElementById('rteSearchInput').value = '';
+    document.getElementById('rteReplaceInput').value = '';
+    document.getElementById('rteSearchCount').textContent = '';
+    rteSearchMatches = [];
+    rteSearchCurrentIdx = -1;
+    document.getElementById('rteSearchInput').focus();
+}
+
+function rteSearchClose() {
+    document.getElementById('rteSearchBar').style.display = 'none';
+    rteClearHighlights();
+    rteState.editor.focus();
+}
+
+function rteSearchDo() {
+    rteClearHighlights();
+    const q = document.getElementById('rteSearchInput').value;
+    if (!q) {
+        document.getElementById('rteSearchCount').textContent = '';
+        rteSearchMatches = [];
+        return;
+    }
+
+    const ed = rteState.editor;
+    const html = ed.innerHTML;
+    const lowerHtml = html.toLowerCase();
+    const lowerQ = q.toLowerCase();
+
+    rteSearchMatches = [];
+    let idx = 0;
+    while ((idx = lowerHtml.indexOf(lowerQ, idx)) !== -1) {
+        rteSearchMatches.push(idx);
+        idx += lowerQ.length;
+    }
+
+    rteSearchCurrentIdx = -1;
+
+    if (rteSearchMatches.length === 0) {
+        document.getElementById('rteSearchCount').textContent = 'No matches';
+        return;
+    }
+
+    document.getElementById('rteSearchCount').textContent = `${rteSearchMatches.length} match${rteSearchMatches.length !== 1 ? 'es' : ''}`;
+
+    // Highlight all matches in the content
+    rteHighlightMatches(lowerQ);
+    rteSearchGoTo(0);
+}
+
+function rteHighlightMatches(lowerQ) {
+    const ed = rteState.editor;
+    // We need to walk text nodes and wrap matches
+    const walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, null, false);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+    textNodes.forEach(node => {
+        const text = node.textContent;
+        const lowerText = text.toLowerCase();
+        let idx = 0;
+        let result = [];
+        let lastIdx = 0;
+
+        while ((idx = lowerText.indexOf(lowerQ, idx)) !== -1) {
+            if (idx > lastIdx) result.push(document.createTextNode(text.slice(lastIdx, idx)));
+            const mark = document.createElement('mark');
+            mark.className = 'rte-highlight';
+            mark.textContent = text.slice(idx, idx + lowerQ.length);
+            result.push(mark);
+            idx += lowerQ.length;
+            lastIdx = idx;
+        }
+        if (lastIdx < text.length) result.push(document.createTextNode(text.slice(lastIdx)));
+
+        if (result.length > 0) {
+            const parent = node.parentNode;
+            result.forEach(n => parent.insertBefore(n, node));
+            parent.removeChild(node);
+        }
+    });
+}
+
+function rteClearHighlights() {
+    const ed = rteState.editor;
+    ed.querySelectorAll('.rte-highlight').forEach(mark => {
+        const parent = mark.parentNode;
+        const text = document.createTextNode(mark.textContent);
+        parent.insertBefore(text, mark);
+        parent.removeChild(mark);
+        parent.normalize();
+    });
+}
+
+function rteSearchGoTo(idx) {
+    if (rteSearchMatches.length === 0) return;
+    rteSearchCurrentIdx = (idx + rteSearchMatches.length) % rteSearchMatches.length;
+
+    const ed = rteState.editor;
+    const marks = ed.querySelectorAll('.rte-highlight');
+    marks.forEach((m, i) => {
+        m.classList.toggle('rte-selected-text', i === rteSearchCurrentIdx);
+        if (i === rteSearchCurrentIdx) {
+            m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Select the text
+            const range = document.createRange();
+            range.selectNodeContents(m);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    });
+
+    document.getElementById('rteSearchCount').textContent =
+        `${rteSearchCurrentIdx + 1} / ${rteSearchMatches.length}`;
+}
+
+function rteSearchNext() { rteSearchGoTo(rteSearchCurrentIdx + 1); }
+function rteSearchPrev() { rteSearchGoTo(rteSearchCurrentIdx - 1); }
+
+function rteSearchReplace() {
+    const q = document.getElementById('rteSearchInput').value;
+    const replaceWith = document.getElementById('rteReplaceInput').value;
+    if (!q) return;
+
+    // Replace current selection if it's a highlighted match
+    const sel = window.getSelection();
+    if (sel.rangeCount > 0) {
+        const node = sel.focusNode;
+        const mark = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        if (mark && mark.classList && mark.classList.contains('rte-highlight')) {
+            mark.textContent = replaceWith;
+            mark.classList.remove('rte-highlight', 'rte-selected-text');
+            rteScheduleAutoSave();
+            rteSearchDo();
+            rteSearchGoTo(rteSearchCurrentIdx);
+            return;
+        }
+    }
+
+    // Fallback: find and replace first match
+    const ed = rteState.editor;
+    const html = ed.innerHTML;
+    const lowerHtml = html.toLowerCase();
+    const lowerQ = q.toLowerCase();
+    const idx = lowerHtml.indexOf(lowerQ);
+    if (idx !== -1) {
+        ed.innerHTML = html.slice(0, idx) + escHtml(replaceWith) + html.slice(idx + q.length);
+        rteScheduleAutoSave();
+        rteSearchDo();
+        rteSearchGoTo(rteSearchCurrentIdx);
+    }
+}
+
+function rteSearchReplaceAll() {
+    const q = document.getElementById('rteSearchInput').value;
+    const replaceWith = document.getElementById('rteReplaceInput').value;
+    if (!q) return;
+
+    const ed = rteState.editor;
+    const html = ed.innerHTML;
+    const lowerHtml = html.toLowerCase();
+    const lowerQ = q.toLowerCase();
+
+    let result = '';
+    let lastIdx = 0;
+    let idx = 0;
+    let count = 0;
+    while ((idx = lowerHtml.indexOf(lowerQ, idx)) !== -1) {
+        result += html.slice(lastIdx, idx) + escHtml(replaceWith);
+        idx += lowerQ.length;
+        lastIdx = idx;
+        count++;
+    }
+    result += html.slice(lastIdx);
+
+    if (count > 0) {
+        ed.innerHTML = result;
+        rteScheduleAutoSave();
+        rteSearchDo();
+        toast(`Replaced ${count} occurrence${count !== 1 ? 's' : ''}`, 'success');
+    }
+}
+
+// ============================================
+// Copy & Export Functions
+// ============================================
+
+function rteCopyPlainText() {
+    const text = rteConvertToPlainText();
+    const btn = document.getElementById('rteCopyPlainBtn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+    rteCopyToClipboard(text, 'Plain text copied to clipboard!');
+}
+
+function rteCopyFormatted() {
+    const html = rteState.editor.innerHTML;
+    const plainText = rteConvertToPlainText();
+
+    function showCopied() {
+        const btn = document.getElementById('rteCopyAllBtn');
+        if (btn) {
+            const orig = btn.innerHTML;
+            btn.classList.add('copied');
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied! Ready to paste';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.innerHTML = orig;
+            }, 2500);
+        }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.write) {
+        const blobHtml = new Blob([html], { type: 'text/html' });
+        const blobText = new Blob([plainText], { type: 'text/plain' });
+        const clipboardItem = new ClipboardItem({
+            'text/html': blobHtml,
+            'text/plain': blobText,
+        });
+        navigator.clipboard.write([clipboardItem]).then(() => {
+            showCopied();
+            toast('Content with formatting copied! Paste into your ticket system.', 'success');
+        }).catch(() => {
+            navigator.clipboard.writeText(html).then(() => {
+                showCopied();
+                toast('Content copied!', 'success');
+            }).catch(() => toast('Failed to copy', 'error'));
+        });
+    } else {
+        navigator.clipboard.writeText(html).then(() => {
+            showCopied();
+            toast('Content copied!', 'success');
+        }).catch(() => toast('Failed to copy', 'error'));
+    }
+}
+
+function rteExportHTML() {
+    const html = rteState.editor.innerHTML;
+    const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Document</title></head>
+<body>
+${html}
+</body>
+</html>`;
+    rteDownloadFile(fullHtml, 'document.html', 'text/html');
+    toast('HTML exported!', 'success');
+}
+
+function rteExportMarkdown() {
+    const md = rteConvertToMarkdown();
+    rteDownloadFile(md, 'document.md', 'text/markdown');
+    toast('Markdown exported!', 'success');
+}
+
+function rteExportPlainText() {
+    const text = rteConvertToPlainText();
+    rteDownloadFile(text, 'document.txt', 'text/plain');
+    toast('Plain text exported!', 'success');
+}
+
+function rteDownloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function rteCopyToClipboard(text, successMsg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            toast(successMsg, 'success');
+        }).catch(() => {
+            rteFallbackCopy(text);
+        });
+    } else {
+        rteFallbackCopy(text);
+    }
+}
+
+function rteFallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        toast('Copied!', 'success');
+    } catch (_) {
+        toast('Failed to copy', 'error');
+    }
+    document.body.removeChild(ta);
+}
+
+// ============================================
+// Plain Text Conversion with Structure Preservation
+// ============================================
+
+function rteConvertToPlainText() {
+    const ed = rteState.editor;
+    const clone = ed.cloneNode(true);
+    return rteNodeToPlainText(clone, 0);
+}
+
+function rteNodeToPlainText(node, depth) {
+    let text = '';
+
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+        if (child.nodeType === Node.TEXT_NODE) {
+            text += child.textContent;
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+            const tag = child.tagName.toLowerCase();
+            const inner = rteNodeToPlainText(child, depth + 1);
+
+            switch (tag) {
+                case 'br':
+                    text += '\n';
+                    break;
+                case 'p':
+                case 'div':
+                    text += inner;
+                    if (!inner.endsWith('\n')) text += '\n\n';
+                    else if (!inner.endsWith('\n\n')) text += '\n';
+                    break;
+                case 'h1':
+                case 'h2':
+                case 'h3':
+                case 'h4':
+                case 'h5':
+                case 'h6':
+                    text += inner + '\n\n';
+                    break;
+                case 'blockquote':
+                    text += inner.split('\n').map(l => l.trim() ? `> ${l}` : l).join('\n') + '\n\n';
+                    break;
+                case 'pre':
+                    text += inner + '\n\n';
+                    break;
+                case 'li': {
+                    const parent = child.parentElement;
+                    const parentTag = parent ? parent.tagName.toLowerCase() : '';
+                    const isOl = parentTag === 'ol';
+                    const isChecklist = parent && parent.dataset.type === 'checklist';
+
+                    // Compute depth for nested lists
+                    let listDepth = -1;
+                    let p = child.parentElement;
+                    while (p) {
+                        if (p.tagName && (p.tagName.toLowerCase() === 'ul' || p.tagName.toLowerCase() === 'ol')) listDepth++;
+                        if (p === node) break;
+                        p = p.parentElement;
+                    }
+
+                    const indent = '  '.repeat(Math.max(0, listDepth));
+
+                    if (isChecklist) {
+                        const checkbox = child.querySelector('.rte-checkbox');
+                        const checked = checkbox ? checkbox.checked : false;
+                        text += `${indent}${checked ? '[x]' : '[ ]'} ${inner}\n`;
+                    } else if (isOl) {
+                        const items = parent ? Array.from(parent.children) : [];
+                        const index = items.indexOf(child) + 1;
+                        text += `${indent}${index}. ${inner}\n`;
+                    } else {
+                        text += `${indent}• ${inner}\n`;
+                    }
+                    break;
+                }
+                case 'ul':
+                case 'ol':
+                    text += inner;
+                    if (!inner.endsWith('\n')) text += '\n';
+                    break;
+                case 'hr':
+                    text += '\n---\n\n';
+                    break;
+                case 'table':
+                    text += rteTableToPlainText(child) + '\n\n';
+                    break;
+                case 'th':
+                case 'td':
+                    text += inner + '\t';
+                    break;
+                case 'tr':
+                    text += inner.trimEnd() + '\n';
+                    break;
+                case 'tbody':
+                case 'thead':
+                case 'tfoot':
+                    text += inner;
+                    break;
+                case 'a':
+                    text += inner;
+                    break;
+                case 'img':
+                    text += child.getAttribute('alt') || '[Image]';
+                    break;
+                case 'input':
+                    if (child.type === 'checkbox') {
+                        text += child.checked ? '[x] ' : '[ ] ';
+                    }
+                    break;
+                default:
+                    text += inner;
+                    break;
+            }
+        }
+    }
+
+    return text;
+}
+
+function rteTableToPlainText(table) {
+    let text = '';
+    const rows = table.querySelectorAll('tr');
+    let maxCols = 0;
+    const cellTexts = [];
+
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td, th');
+        const rowTexts = [];
+        cells.forEach(cell => rowTexts.push(rteNodeToPlainText(cell, 0).trim()));
+        cellTexts.push(rowTexts);
+        maxCols = Math.max(maxCols, rowTexts.length);
+    });
+
+    // Calculate column widths
+    const colWidths = [];
+    for (let c = 0; c < maxCols; c++) {
+        let maxW = 0;
+        cellTexts.forEach(row => {
+            if (row[c]) maxW = Math.max(maxW, row[c].length);
+        });
+        colWidths.push(Math.max(maxW, 3));
+    }
+
+    // Build separator
+    const sep = colWidths.map(w => '-'.repeat(w + 2)).join('+') + '\n';
+
+    cellTexts.forEach((row, ri) => {
+        text += '| ';
+        for (let c = 0; c < maxCols; c++) {
+            text += (row[c] || '').padEnd(colWidths[c]) + ' | ';
+        }
+        text = text.trimEnd() + '\n';
+        if (ri === 0) text += sep;
+    });
+
+    return text;
+}
+
+// ============================================
+// Markdown Conversion
+// ============================================
+
+function rteConvertToMarkdown() {
+    const ed = rteState.editor;
+    const clone = ed.cloneNode(true);
+    return rteNodeToMarkdown(clone, 0).trim();
+}
+
+function rteNodeToMarkdown(node, depth) {
+    let md = '';
+
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+        if (child.nodeType === Node.TEXT_NODE) {
+            md += child.textContent;
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+            const tag = child.tagName.toLowerCase();
+            const inner = rteNodeToMarkdown(child, depth + 1);
+
+            switch (tag) {
+                case 'br':
+                    md += '\n';
+                    break;
+                case 'p':
+                    md += inner + '\n\n';
+                    break;
+                case 'h1': md += '# ' + inner + '\n\n'; break;
+                case 'h2': md += '## ' + inner + '\n\n'; break;
+                case 'h3': md += '### ' + inner + '\n\n'; break;
+                case 'h4': md += '#### ' + inner + '\n\n'; break;
+                case 'h5': md += '##### ' + inner + '\n\n'; break;
+                case 'h6': md += '###### ' + inner + '\n\n'; break;
+                case 'strong':
+                case 'b':
+                    md += '**' + inner + '**';
+                    break;
+                case 'em':
+                case 'i':
+                    md += '*' + inner + '*';
+                    break;
+                case 'u':
+                    md += '<u>' + inner + '</u>';
+                    break;
+                case 's':
+                case 'strike':
+                    md += '~~' + inner + '~~';
+                    break;
+                case 'code':
+                    md += '`' + inner + '`';
+                    break;
+                case 'pre':
+                    md += '```\n' + inner.trim() + '\n```\n\n';
+                    break;
+                case 'blockquote':
+                    md += inner.split('\n').map(l => l.trim() ? '> ' + l : l).join('\n') + '\n\n';
+                    break;
+                case 'a':
+                    md += '[' + inner + '](' + (child.getAttribute('href') || '') + ')';
+                    break;
+                case 'img':
+                    md += '![' + (child.getAttribute('alt') || '') + '](' + (child.getAttribute('src') || '') + ')';
+                    break;
+                case 'hr':
+                    md += '---\n\n';
+                    break;
+                case 'ul':
+                case 'ol': {
+                    const items = child.querySelectorAll(':scope > li');
+                    items.forEach((li, i) => {
+                        const liInner = rteNodeToMarkdown(li, depth + 1);
+                        const prefix = tag === 'ol' ? `${i + 1}.` : '-';
+                        md += '  '.repeat(depth) + prefix + ' ' + liInner + '\n';
+                    });
+                    md += '\n';
+                    break;
+                }
+                case 'li':
+                    md += inner;
+                    break;
+                case 'table':
+                    md += rteTableToMarkdown(child) + '\n\n';
+                    break;
+                case 'th':
+                case 'td':
+                    md += inner + ' | ';
+                    break;
+                case 'tr':
+                    md += '| ' + inner.trimEnd() + '\n';
+                    break;
+                case 'tbody':
+                case 'thead':
+                case 'tfoot':
+                    md += inner;
+                    break;
+                default:
+                    md += inner;
+                    break;
+            }
+        }
+    }
+
+    return md;
+}
+
+function rteTableToMarkdown(table) {
+    let md = '';
+    const rows = table.querySelectorAll('tr');
+    let maxCols = 0;
+
+    rows.forEach((row, ri) => {
+        const cells = row.querySelectorAll('td, th');
+        const texts = [];
+        cells.forEach(cell => texts.push(rteNodeToMarkdown(cell, 0).trim()));
+        maxCols = Math.max(maxCols, texts.length);
+
+        md += '| ' + texts.join(' | ') + ' |\n';
+        if (ri === 0) {
+            md += '| ' + texts.map(() => '---').join(' | ') + ' |\n';
+        }
+    });
+
+    return md;
+}
+
+// ============================================
+// Templates
+// ============================================
+
+function rteSaveTemplate() {
+    const content = rteState.editor.innerHTML;
+    if (!content || content === '<p>Start typing or paste your content here...</p>') {
+        toast('Editor is empty', 'warning');
+        return;
+    }
+
+    const name = prompt('Template name:');
+    if (!name || !name.trim()) return;
+
+    const templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');
+    templates.push({ name: name.trim(), content, created: new Date().toISOString() });
+    localStorage.setItem('rte-templates', JSON.stringify(templates));
+    rteState.templates = templates;
+
+    rteRenderTemplates();
+    toast(`Template "${name}" saved!`, 'success');
+}
+
+function rteInsertTemplate(name) {
+    const templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');
+    const tpl = templates.find(t => t.name === name);
+    if (!tpl) return;
+
+    rteState.editor.innerHTML = tpl.content;
+    rteScheduleAutoSave();
+    rteUpdateStats();
+    toast(`Template "${name}" loaded`, 'info');
+}
+
+function rteDeleteTemplate(name) {
+    let templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');
+    templates = templates.filter(t => t.name !== name);
+    localStorage.setItem('rte-templates', JSON.stringify(templates));
+    rteState.templates = templates;
+    rteRenderTemplates();
+    toast(`Template "${name}" deleted`, 'info');
+}
+
+function rteRenderTemplates() {
+    const container = document.getElementById('rteTemplateList');
+    if (!container) return;
+
+    const templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');
+    if (!templates.length) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = templates.map(t => `
+        <button class="rte-template-btn" data-tpl="${escHtml(t.name)}">
+            <i class="fas fa-reply"></i> ${escHtml(t.name)}
+        </button>
+    `).join('');
+
+    container.querySelectorAll('.rte-template-btn').forEach(btn => {
+        btn.addEventListener('click', () => rteInsertTemplate(btn.dataset.tpl));
+        btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (confirm(`Delete template "${btn.dataset.tpl}"?`)) {
+                rteDeleteTemplate(btn.dataset.tpl);
+            }
+        });
+    });
 }
 
 // ============================================
