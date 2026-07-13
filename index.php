@@ -17,29 +17,32 @@ $appName = APP_NAME;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark">
     <title><?= $appName ?></title>
+    <link rel="icon" type="image/png" href="ficksie_logo_nt.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/style.css?v=202607139">
+    <link rel="stylesheet" href="assets/css/style.css?v=66">
 </head>
 <body>
     <div id="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <i class="fas fa-cubes"></i>
-                    <span><?= $appName ?></span>
+                    <div class="logo-images">
+                        <img src="ficksie_logo_nt.png" alt="<?= $appName ?>" class="logo-img">
+                        <img src="ficksie_logo_t.png" alt="<?= $appName ?>" class="logo-text-img">
+                    </div>
+                    <div class="slogan">Niet moeilijk doen, ficksie het ff</div>
                 </div>
                 <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
                     <i class="fas fa-chevron-left"></i>
                 </button>
             </div>
 
-            <nav class="sidebar-nav" id="moduleNav">
-                <!-- Modules loaded dynamically -->
-                <div class="nav-loading">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <span>Loading...</span>
-                </div>
-            </nav>
+            <div class="tw-sidebar-wrap">
+                <button class="tw-trigger" id="twTrigger">
+                    <i class="fas fa-compass"></i>
+                    <span>Tool Wheel</span>
+                </button>
+            </div>
 
             <div class="sidebar-footer">
                 <div class="version-badge">v1.0.0</div>
@@ -62,6 +65,8 @@ $appName = APP_NAME;
                     </button>
                 </div>
             </header>
+
+            <div class="tab-bar" id="tabBar" style="display:none"></div>
 
             <div class="content-body" id="contentBody">
                 <!-- Dashboard loaded by default -->
@@ -222,10 +227,10 @@ $appName = APP_NAME;
         <div class="login-card">
             <div class="login-card-inner">
                 <div class="login-icon">
-                    <i class="fas fa-cubes"></i>
+                    <img src="ficksie_logo_t.png" alt="<?= $appName ?>" class="login-logo-img">
                 </div>
-                <h1 class="login-title"><?= $appName ?></h1>
-                <p class="login-subtitle">Niet moeilijk doen. <?= $appName ?> het ff</p>
+                <h1 class="login-title" style="display:none"><?= $appName ?></h1>
+                <p class="login-subtitle">Niet moeilijk doen, ficksie het ff</p>
 
                 <!-- Login Form -->
                 <form id="loginForm">
@@ -275,11 +280,16 @@ $appName = APP_NAME;
         </div>
     </div>
 
+    <!-- Tool Wheel Overlay -->
+    <div class="tw-overlay" id="twOverlay">
+        <div class="tw-overlay-inner" id="twOverlayInner"></div>
+    </div>
+
     <!-- Toast container -->
     <div class="toast-container" id="toastContainer"></div>
-<script src="assets/js/dns.js?v=202607138"></script>
-<script src="assets/js/password-generator.js?v=202607138"></script>
+<script src="assets/js/dns.js?v=23"></script>
+<script src="assets/js/password-generator.js?v=20"></script>
 
-    <script src="assets/js/app.js?v=202607138"></script>
+    <script src="assets/js/app.js?v=44"></script>
 </body>
 </html>

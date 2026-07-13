@@ -22,7 +22,6 @@ const state = {
     currentSubview: null,
     filterCategory: '',
     searchQuery: '',
-    sidebarCollapsed: localStorage.getItem('toolhub-sidebar') === 'true',
 };
 
 // ============================================
@@ -213,166 +212,649 @@ function closeAllModals() {
 }
 
 // ============================================
+// Tab System
+// ============================================
+const TAB_MAX = 5;
+let tabState = { tabs: [], activeTab: null };
+
+const viewMeta = {
+    'dashboard':          { title: 'Dashboard',          subtitle: 'Your central workspace',        icon: 'fa-th-large' },
+    'commands':           { title: 'Commands',           subtitle: 'Manage your Linux commands',     icon: 'fa-terminal' },
+    'email-anonymizer':   { title: 'Email Anonymizer',   subtitle: 'Mask email addresses for privacy', icon: 'fa-mask' },
+    'email-header-viz':   { title: 'Header Visualizer',  subtitle: 'Parse and analyze email headers', icon: 'fa-code-branch' },
+    'snippets':           { title: 'Snippets',           subtitle: 'Save and copy standard email responses', icon: 'fa-reply' },
+    'rte-editor':         { title: 'Text Editor',        subtitle: 'Format and create rich text documents', icon: 'fa-file-lines' },
+    'ip-reputation':      { title: 'IP Reputation',      subtitle: 'Analyze IP addresses for security', icon: 'fa-shield-halved' },
+    'dns-lookup':         { title: 'DNS Lookup',         subtitle: 'Query DNS records',               icon: 'fa-globe' },
+    'password-generator': { title: 'Password Generator', subtitle: 'Create secure passwords',         icon: 'fa-key' },
+    'users':              { title: 'Manage Users',       subtitle: 'Create and manage user accounts', icon: 'fa-users' },
+};
+
+function getActiveBody() {
+    return document.querySelector('.tab-panel.active');
+}
+
+function saveTabs() {
+    localStorage.setItem('toolhub-tabs', JSON.stringify(tabState.tabs));
+    localStorage.setItem('toolhub-active-tab', tabState.activeTab || '');
+}
+
+function renderTabBar() {
+    const bar = document.getElementById('tabBar');
+    if (!bar) return;
+    bar.style.display = tabState.tabs.length > 0 ? '' : 'none';
+    bar.innerHTML = tabState.tabs.map(tab => {
+        const meta = viewMeta[tab.view] || { title: tab.view, icon: 'fa-cube' };
+        const isActive = tab.id === tabState.activeTab;
+        const closeBtn = tab.view !== 'dashboard' ? `<span class="tab-close" data-tab-close="${tab.id}" title="Close tab">&times;</span>` : '';
+        return `<button class="tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}">
+            <i class="fas ${meta.icon}"></i>
+            <span>${meta.title}</span>
+            ${closeBtn}
+        </button>`;
+    }).join('');
+
+    bar.querySelectorAll('.tab-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.tab-close')) return;
+            switchTab(el.dataset.tabId);
+        });
+    });
+    bar.querySelectorAll('.tab-close').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeTab(el.dataset.tabClose);
+        });
+    });
+}
+
+function dispatchRender(view) {
+    if (view === 'dashboard')          renderDashboard();
+    else if (view === 'commands')           renderCommands();
+    else if (view === 'email-anonymizer')   renderEmailAnonymizer();
+    else if (view === 'email-header-viz')   renderEmailHeaderViz();
+    else if (view === 'snippets')           renderSnippets();
+    else if (view === 'rte-editor')         renderRichTextEditor();
+    else if (view === 'ip-reputation')      renderIpReputation();
+    else if (view === 'dns-lookup')         renderDnsLookup();
+    else if (view === 'password-generator') renderPasswordGenerator();
+    else if (view === 'users')              renderUserManagement();
+}
+
+function openTab(view) {
+    const existingTab = tabState.tabs.find(t => t.view === view);
+    if (existingTab) {
+        switchTab(existingTab.id);
+        return;
+    }
+    if (tabState.tabs.length >= TAB_MAX) {
+        toast('Max 3 tabs. Close one first.', 'error');
+        return;
+    }
+    const id = 'tab_' + Date.now();
+    tabState.tabs.push({ id, view });
+    tabState.activeTab = id;
+
+    const contentBody = document.getElementById('contentBody');
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel active';
+    panel.dataset.tabId = id;
+    contentBody.appendChild(panel);
+
+    document.querySelectorAll('.tab-panel').forEach(p => {
+        if (p.dataset.tabId !== id) p.classList.remove('active');
+    });
+
+    state.currentView = view;
+    renderTabBar();
+    saveTabs();
+    updateNavActive(view);
+    dispatchRender(view);
+}
+
+function switchTab(tabId) {
+    const tab = tabState.tabs.find(t => t.id === tabId);
+    if (!tab) return;
+    tabState.activeTab = tabId;
+    state.currentView = tab.view;
+
+    document.querySelectorAll('.tab-panel').forEach(p => {
+        p.classList.toggle('active', p.dataset.tabId === tabId);
+    });
+
+    const meta = viewMeta[tab.view] || { title: tab.view, subtitle: '' };
+    setPageTitle(meta.title, meta.subtitle);
+    renderTabBar();
+    saveTabs();
+    updateNavActive(tab.view);
+    closeSidebar();
+}
+
+function closeTab(tabId) {
+    const tab = tabState.tabs.find(t => t.id === tabId);
+    if (!tab || tab.view === 'dashboard') return;
+    const idx = tabState.tabs.findIndex(t => t.id === tabId);
+
+    tabState.tabs.splice(idx, 1);
+    const panel = document.querySelector(`.tab-panel[data-tab-id="${tabId}"]`);
+    if (panel) panel.remove();
+
+    if (tabState.tabs.length === 0) {
+        tabState.activeTab = null;
+        renderTabBar();
+        saveTabs();
+        navigate('dashboard');
+        return;
+    }
+    if (tabState.activeTab === tabId) {
+        const newIdx = Math.min(idx, tabState.tabs.length - 1);
+        switchTab(tabState.tabs[newIdx].id);
+    } else {
+        renderTabBar();
+        saveTabs();
+    }
+}
+
+function updateNavActive(view) {
+    if (typeof twSetActive === 'function') twSetActive(view);
+}
+
+function loadTabs() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('toolhub-tabs') || '[]');
+        const savedActive = localStorage.getItem('toolhub-active-tab') || '';
+        if (saved.length > 0) {
+            const contentBody = document.getElementById('contentBody');
+            const activeId = saved.find(t => t.id === savedActive) ? savedActive : saved[0].id;
+
+            saved.forEach(tab => {
+                const panel = document.createElement('div');
+                panel.className = 'tab-panel';
+                panel.dataset.tabId = tab.id;
+                contentBody.appendChild(panel);
+                tabState.tabs.push(tab);
+            });
+
+            tabState.activeTab = activeId;
+            const activeTab = tabState.tabs.find(t => t.id === activeId);
+            if (activeTab) state.currentView = activeTab.view;
+
+            renderTabBar();
+            updateNavActive(state.currentView);
+
+            saved.forEach(tab => {
+                const panel = document.querySelector(`.tab-panel[data-tab-id="${tab.id}"]`);
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                panel.classList.add('active');
+                state.currentView = tab.view;
+                dispatchRender(tab.view);
+            });
+
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            const finalPanel = document.querySelector(`.tab-panel[data-tab-id="${activeId}"]`);
+            if (finalPanel) finalPanel.classList.add('active');
+            if (activeTab) {
+                state.currentView = activeTab.view;
+                const meta = viewMeta[activeTab.view] || { title: activeTab.view, subtitle: '' };
+                setPageTitle(meta.title, meta.subtitle);
+            }
+            return;
+        }
+    } catch (e) {}
+    navigate('dashboard');
+}
+
+// ============================================
 // Module / Navigation
 // ============================================
 async function loadModules() {
     state.modules = await api('GET', 'modules');
-    renderNav();
+    initToolWheel();
 }
 
-const navState = {
-    expanded: { 'command-hub': true, 'email-tools': false, 'network-tools': true, 'security-tools': false },
+// ============================================
+// Tool Wheel Navigation
+// ============================================
+const twState = {
+    tools: [],
+    angle: 0,
+    selectedIdx: 0,
+    radius: 290,
+    segAngle: 36,
+    overlayEl: null,
+    viewportEl: null,
+    discEl: null,
+    open: false,
+    tweenRAF: null,
+    dragMoved: false,
+    dragging: false,
+    dragStartY: 0,
+    dragStartAngle: 0,
+    dragLastY: 0,
+    dragLastTime: 0,
+    velocity: 0,
+    animating: false,
+    wheelCooldown: false,
 };
 
-function renderNav() {
-    const nav = document.getElementById('moduleNav');
-    nav.innerHTML = '';
+function twSectorPath(startDeg, endDeg, innerR, outerR) {
+    if (innerR === undefined) innerR = 0;
+    if (outerR === undefined) outerR = 50;
+    const pts = [];
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+        const deg = startDeg + (endDeg - startDeg) * (i / steps);
+        const rad = (deg - 90) * Math.PI / 180;
+        pts.push(`${(50 + outerR * Math.cos(rad)).toFixed(2)}% ${(50 + outerR * Math.sin(rad)).toFixed(2)}%`);
+    }
+    if (innerR > 0) {
+        for (let i = steps; i >= 0; i--) {
+            const deg = startDeg + (endDeg - startDeg) * (i / steps);
+            const rad = (deg - 90) * Math.PI / 180;
+            pts.push(`${(50 + innerR * Math.cos(rad)).toFixed(2)}% ${(50 + innerR * Math.sin(rad)).toFixed(2)}%`);
+        }
+    } else {
+        pts.unshift('50.00% 50.00%');
+    }
+    return `polygon(${pts.join(',')})`;
+}
 
-    const dashItem = document.createElement('button');
-    dashItem.className = `nav-item ${state.currentView === 'dashboard' ? 'active' : ''}`;
-    dashItem.dataset.view = 'dashboard';
-    dashItem.title = 'Dashboard';
-    dashItem.innerHTML = '<i class="fas fa-th-large"></i> <span>Dashboard</span>';
-    dashItem.addEventListener('click', () => navigate('dashboard'));
-    nav.appendChild(dashItem);
+function twSliceColor(i, total) {
+    return 'rgba(8, 8, 16, 0.95)';
+}
 
-    const sections = [
-        {
-            key: 'command-hub',
-            label: 'Command Hub',
-            icon: 'fa-terminal',
-            items: [
-                { view: 'commands', icon: 'fa-list', label: 'Commands' },
-            ],
-        },
-        {
-            key: 'email-tools',
-            label: 'Email Tools',
-            icon: 'fa-envelope',
-            items: [
-                { view: 'email-anonymizer', icon: 'fa-mask', label: 'Email Anonymizer' },
-                { view: 'email-header-viz', icon: 'fa-code-branch', label: 'Header Visualizer' },
-                { view: 'snippets', icon: 'fa-reply', label: 'Snippets' },
-            ],
-        },
-        {
-            key: 'editor-tools',
-            label: 'Editor',
-            icon: 'fa-pen-fancy',
-            items: [
-                { view: 'rte-editor', icon: 'fa-file-lines', label: 'Text Editor' },
-            ],
-        },
-        {
-            key: 'network-tools',
-            label: 'Network Tools',
-            icon: 'fa-globe',
-            items: [
-                { view: 'ip-reputation', icon: 'fa-shield-halved', label: 'IP Reputation' },
-                { view: 'dns-lookup', icon: 'fa-globe', label: 'DNS Lookup Suite' },
-            ],
-        },
-        {
-            key: 'security-tools',
-            label: 'Security',
-            icon: 'fa-lock',
-            items: [
-                { view: 'password-generator', icon: 'fa-key', label: 'Password Generator' },
-            ],
-        },
+function initToolWheel() {
+    const btn = document.getElementById('twTrigger');
+    if (!btn) return;
+
+    twState.tools = [
+        { view: 'dashboard', icon: 'fa-th-large', label: 'Dashboard', color: '#818cf8' },
+        { view: 'commands', icon: 'fa-list', label: 'Commands', color: '#a78bfa' },
+        { view: 'email-anonymizer', icon: 'fa-mask', label: 'Email Anon', color: '#34d399' },
+        { view: 'email-header-viz', icon: 'fa-code-branch', label: 'Header Viz', color: '#60a5fa' },
+        { view: 'snippets', icon: 'fa-reply', label: 'Snippets', color: '#2dd4bf' },
+        { view: 'rte-editor', icon: 'fa-file-lines', label: 'Text Editor', color: '#fbbf24' },
+        { view: 'ip-reputation', icon: 'fa-shield-halved', label: 'IP Rep', color: '#f87171' },
+        { view: 'dns-lookup', icon: 'fa-globe', label: 'DNS Lookup', color: '#38bdf8' },
+        { view: 'password-generator', icon: 'fa-key', label: 'Pass Gen', color: '#c084fc' },
     ];
+    if (isAdmin()) twState.tools.push({ view: 'users', icon: 'fa-users', label: 'Users', color: '#fb923c' });
+    twState.segAngle = 360 / twState.tools.length;
 
-    if (isAdmin()) {
-        sections.push({
-            key: 'admin',
-            label: 'Administration',
-            icon: 'fa-shield-halved',
-            items: [
-                { view: 'users', icon: 'fa-users', label: 'Manage Users' },
-            ],
+    twState.overlayEl = document.getElementById('twOverlay');
+
+    btn.addEventListener('click', () => {
+        if (twState.open) closeWheel();
+        else openWheel();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && twState.open) closeWheel();
+    });
+}
+
+function openWheel() {
+    if (twState.open) return;
+    twState.open = true;
+
+    const overlay = twState.overlayEl;
+    const inner = document.getElementById('twOverlayInner');
+    inner.innerHTML = '';
+
+    overlay.classList.add('active');
+
+    const viewport = document.createElement('div');
+    viewport.className = 'tw-viewport';
+
+    const disc = document.createElement('div');
+    disc.className = 'tw-disc';
+
+    const indicator = document.createElement('div');
+    indicator.className = 'tw-indicator-top';
+
+    const hubLogo = document.createElement('div');
+    hubLogo.className = 'tw-hub-logo';
+    hubLogo.innerHTML = '<img src="ficksie_logo_nt.png" alt="ficksie">';
+
+    const dist = 0.72;
+
+    twState.tools.forEach((tool, i) => {
+        const startA = i * twState.segAngle;
+        const endA = (i + 1) * twState.segAngle;
+        const midA = startA + twState.segAngle / 2;
+
+        const gap = 1.5;
+        const borderGap = 0.3;
+
+        const border = document.createElement('div');
+        border.className = 'tw-border';
+        border.style.clipPath = twSectorPath(startA + borderGap, endA - borderGap, 48, 50);
+        border.style.webkitClipPath = twSectorPath(startA + borderGap, endA - borderGap, 48, 50);
+        border.style.setProperty('--tw-start-deg', startA + 'deg');
+        border.style.setProperty('--tw-span-deg', twState.segAngle + 'deg');
+
+        const slice = document.createElement('div');
+        slice.className = 'tw-slice';
+        slice.style.clipPath = twSectorPath(startA + gap, endA - gap, 0, 42);
+        slice.style.webkitClipPath = twSectorPath(startA + gap, endA - gap, 0, 42);
+        slice.style.background = twSliceColor(i, twState.tools.length);
+
+        const content = document.createElement('div');
+        content.className = 'tw-slice-content';
+        content.dataset.view = tool.view;
+
+        const midRad = (midA - 90) * Math.PI / 180;
+        const cx = 50 + dist * 50 * Math.cos(midRad);
+        const cy = 50 + dist * 50 * Math.sin(midRad);
+        content.style.left = cx + '%';
+        content.style.top = cy + '%';
+
+        content.innerHTML = `<i class="fas ${tool.icon}"></i><span>${tool.label}</span>`;
+        content.querySelector('i').style.color = tool.color;
+        content.querySelector('span').style.color = tool.color;
+        content.style.setProperty('--tw-tool-color', tool.color);
+        content.addEventListener('click', () => {
+            if (!twState.dragMoved) {
+                navigate(tool.view);
+                closeWheel();
+            }
         });
+
+        slice.appendChild(content);
+        disc.appendChild(border);
+        disc.appendChild(slice);
+
+        tool.slice = slice;
+        tool.border = border;
+        tool.content = content;
+        tool.midAngle = midA;
+    });
+
+    viewport.appendChild(disc);
+    viewport.appendChild(hubLogo);
+    viewport.appendChild(indicator);
+    inner.appendChild(viewport);
+
+    twState.viewportEl = viewport;
+    twState.discEl = disc;
+
+    positionOverlayDisc();
+
+    const currentIdx = twState.tools.findIndex(t => t.view === state.currentView);
+    if (currentIdx >= 0) {
+        twState.angle = -currentIdx * twState.segAngle - twState.segAngle / 2;
+        twState.selectedIdx = currentIdx;
     }
 
-    sections.forEach(section => {
-        const isOpen = navState.expanded[section.key] !== false;
-        const hasActive = section.items.some(i => state.currentView === i.view);
+    viewport.addEventListener('wheel', twOnWheel, { passive: false });
+    viewport.addEventListener('mousedown', twOnDragStart);
+    document.addEventListener('mousemove', twOnDragMove);
+    document.addEventListener('mouseup', twOnDragEnd);
+    viewport.addEventListener('touchstart', twOnTouchStart, { passive: false });
+    document.addEventListener('touchmove', twOnTouchMove, { passive: false });
+    document.addEventListener('touchend', twOnTouchEnd);
 
-        const header = document.createElement('button');
-        header.className = `nav-section-header ${hasActive ? 'has-active' : ''}`;
-        header.title = section.label;
-        header.innerHTML = `
-            <i class="fas ${section.icon}"></i>
-            <span>${section.label}</span>
-            <i class="fas fa-chevron-down nav-chevron ${isOpen ? 'open' : ''}"></i>
-        `;
-        header.addEventListener('click', () => {
-            navState.expanded[section.key] = !navState.expanded[section.key];
-            renderNav();
-        });
-        nav.appendChild(header);
+    overlay.addEventListener('click', twOnOverlayBgClick);
 
-        const wrapper = document.createElement('div');
-        wrapper.className = `nav-sub-wrapper ${isOpen ? 'open' : ''}`;
-        wrapper.style.overflow = 'hidden';
-        wrapper.style.transition = 'max-height 0.3s ease';
+    updateWheel();
+}
 
-        const inner = document.createElement('div');
-        inner.className = 'nav-sub-inner';
+function closeWheel() {
+    if (!twState.open) return;
+    twState.open = false;
 
-        section.items.forEach(item => {
-            const el = document.createElement('button');
-            el.className = `nav-item nav-sub-item ${state.currentView === item.view ? 'active' : ''}`;
-            el.dataset.view = item.view;
-            el.title = item.label;
-            el.innerHTML = `<i class="fas ${item.icon}"></i> <span>${item.label}</span>`;
-            el.addEventListener('click', () => navigate(item.view));
-            inner.appendChild(el);
-        });
+    const overlay = twState.overlayEl;
+    overlay.classList.remove('active');
 
-        wrapper.appendChild(inner);
-        nav.appendChild(wrapper);
+    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
+    twState.tweenRAF = null;
+    twState.animating = false;
 
-        wrapper.style.maxHeight = '0';
-        void wrapper.offsetHeight;
-        if (isOpen) {
-            wrapper.style.maxHeight = inner.scrollHeight + 'px';
+    if (twState.viewportEl) {
+        twState.viewportEl.removeEventListener('wheel', twOnWheel);
+        twState.viewportEl.removeEventListener('mousedown', twOnDragStart);
+        twState.viewportEl.removeEventListener('touchstart', twOnTouchStart);
+    }
+    document.removeEventListener('mousemove', twOnDragMove);
+    document.removeEventListener('mouseup', twOnDragEnd);
+    document.removeEventListener('touchmove', twOnTouchMove);
+    document.removeEventListener('touchend', twOnTouchEnd);
+    overlay.removeEventListener('click', twOnOverlayBgClick);
+
+    twState.discEl = null;
+    twState.viewportEl = null;
+    document.getElementById('twOverlayInner').innerHTML = '';
+}
+
+function twOnOverlayBgClick(e) {
+    if (e.target === twState.overlayEl || e.target.id === 'twOverlayInner') {
+        closeWheel();
+    }
+}
+
+function positionOverlayDisc() {
+    const disc = twState.discEl;
+    const vp = twState.viewportEl;
+    if (!disc || !vp) return;
+    const r = twState.radius;
+    const d = r * 2;
+    disc.style.width = d + 'px';
+    disc.style.height = d + 'px';
+    disc.style.left = (vp.offsetWidth / 2 - r) + 'px';
+    disc.style.top = (vp.offsetHeight / 2 - r) + 'px';
+}
+
+function updateWheel() {
+    const { tools, angle, discEl } = twState;
+    if (!discEl) return;
+
+    discEl.style.transform = `rotate(${angle}deg)`;
+
+    let closestIdx = 0;
+    let closestDist = Infinity;
+
+    tools.forEach((tool, i) => {
+        tool.content.style.transform = `translate(-50%, -50%) rotate(${-angle}deg)`;
+
+        let effDeg = (tool.midAngle + angle) % 360;
+        if (effDeg > 180) effDeg -= 360;
+        if (effDeg < -180) effDeg += 360;
+        if (Math.abs(effDeg) < closestDist) {
+            closestDist = Math.abs(effDeg);
+            closestIdx = i;
         }
     });
+
+    tools.forEach((tool, i) => {
+        const sel = i === closestIdx;
+        tool.content.classList.toggle('tw-selected', sel);
+        tool.slice.classList.toggle('tw-slice-active', sel);
+        tool.border.classList.toggle('tw-border-active', sel);
+    });
+    twState.selectedIdx = closestIdx;
+}
+
+function twSnapTarget() {
+    const { tools, angle, segAngle } = twState;
+    let best = 0, bestDist = Infinity;
+    for (let i = 0; i < tools.length; i++) {
+        const target = -i * segAngle - segAngle / 2;
+        let dist = Math.abs(angle - target);
+        if (dist > 180) dist = 360 - dist;
+        if (dist < bestDist) { bestDist = dist; best = target; }
+    }
+    while (best - angle > 180) best -= 360;
+    while (angle - best > 180) best += 360;
+    return best;
+}
+
+function twSnapToIdx(idx, duration) {
+    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
+    twState.velocity = 0;
+    twState.animating = false;
+
+    const target = -idx * twState.segAngle - twState.segAngle / 2;
+    let diff = target - twState.angle;
+    while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
+
+    const startAngle = twState.angle;
+    const startTime = performance.now();
+    const dur = duration || 300;
+
+    function tick(time) {
+        const elapsed = time - startTime;
+        let t = Math.min(1, elapsed / dur);
+        t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        twState.angle = startAngle + diff * t;
+        updateWheel();
+        if (t < 1) {
+            twState.tweenRAF = requestAnimationFrame(tick);
+        } else {
+            twState.angle = target;
+            updateWheel();
+            twState.tweenRAF = null;
+        }
+    }
+    twState.tweenRAF = requestAnimationFrame(tick);
+}
+
+function startWheelAnim() {
+    if (twState.animating) return;
+    twState.animating = true;
+    requestAnimationFrame(twTick);
+}
+
+function twTick() {
+    if (!twState.animating) return;
+    let settled = true;
+
+    if (!twState.dragging) {
+        twState.angle += twState.velocity;
+        twState.velocity *= 0.93;
+
+        if (Math.abs(twState.velocity) > 0.06) {
+            settled = false;
+        } else {
+            const target = twSnapTarget();
+            const diff = target - twState.angle;
+            if (Math.abs(diff) > 0.08) {
+                twState.velocity += diff * 0.12;
+                twState.velocity *= 0.8;
+                settled = false;
+            } else {
+                twState.angle = target;
+                twState.velocity = 0;
+            }
+        }
+    }
+
+    updateWheel();
+
+    if (settled) {
+        twState.animating = false;
+    } else {
+        requestAnimationFrame(twTick);
+    }
+}
+
+function twOnWheel(e) {
+    e.preventDefault();
+    if (twState.wheelCooldown) return;
+    twState.wheelCooldown = true;
+    setTimeout(() => { twState.wheelCooldown = false; }, 280);
+
+    const dir = e.deltaY > 0 ? 1 : -1;
+    let nextIdx = twState.selectedIdx + dir;
+    if (nextIdx < 0) nextIdx = twState.tools.length - 1;
+    if (nextIdx >= twState.tools.length) nextIdx = 0;
+
+    twSnapToIdx(nextIdx, 280);
+}
+
+function twOnDragStart(e) {
+    if (e.button !== 0) return;
+    twState.dragging = true;
+    twState.dragMoved = false;
+    twState.dragStartY = e.clientY;
+    twState.dragStartAngle = twState.angle;
+    twState.dragLastY = e.clientY;
+    twState.dragLastTime = Date.now();
+    twState.velocity = 0;
+    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
+}
+
+function twOnDragMove(e) {
+    if (!twState.dragging) return;
+    const dy = e.clientY - twState.dragStartY;
+    if (Math.abs(dy) > 3) twState.dragMoved = true;
+    const anglePerPx = 180 / (twState.radius || 200);
+    twState.angle = twState.dragStartAngle + dy * anglePerPx;
+    const now = Date.now();
+    const dt = now - twState.dragLastTime;
+    if (dt > 0) {
+        twState.velocity = ((e.clientY - twState.dragLastY) * anglePerPx) / dt * 16;
+    }
+    twState.dragLastY = e.clientY;
+    twState.dragLastTime = now;
+    updateWheel();
+}
+
+function twOnDragEnd() {
+    if (!twState.dragging) return;
+    twState.dragging = false;
+    startWheelAnim();
+}
+
+function twOnTouchStart(e) {
+    const t = e.touches[0];
+    twState.dragging = true;
+    twState.dragMoved = false;
+    twState.dragStartY = t.clientY;
+    twState.dragStartAngle = twState.angle;
+    twState.dragLastY = t.clientY;
+    twState.dragLastTime = Date.now();
+    twState.velocity = 0;
+    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
+}
+
+function twOnTouchMove(e) {
+    if (!twState.dragging) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    const dy = t.clientY - twState.dragStartY;
+    if (Math.abs(dy) > 3) twState.dragMoved = true;
+    const anglePerPx = 180 / (twState.radius || 200);
+    twState.angle = twState.dragStartAngle + dy * anglePerPx;
+    const now = Date.now();
+    const dt = now - twState.dragLastTime;
+    if (dt > 0) {
+        twState.velocity = ((t.clientY - twState.dragLastY) * anglePerPx) / dt * 16;
+    }
+    twState.dragLastY = t.clientY;
+    twState.dragLastTime = now;
+    updateWheel();
+}
+
+function twOnTouchEnd() {
+    if (!twState.dragging) return;
+    twState.dragging = false;
+    startWheelAnim();
+}
+
+function twSetActive(view) {
+    if (!twState.open) return;
+    const idx = twState.tools.findIndex(t => t.view === view);
+    if (idx < 0) return;
+    twSnapToIdx(idx, 400);
 }
 
 // ============================================
 // Navigation
 // ============================================
 function navigate(view) {
-    state.currentView = view;
-
-    document.querySelectorAll('.nav-item').forEach(n => {
-        n.classList.toggle('active', n.dataset.view === view);
-    });
-
     closeSidebar();
-
-    if (view === 'dashboard') {
-        renderDashboard();
-    } else if (view === 'commands') {
-        renderCommands();
-    } else if (view === 'email-anonymizer') {
-        renderEmailAnonymizer();
-    } else if (view === 'email-header-viz') {
-        renderEmailHeaderViz();
-    } else if (view === 'snippets') {
-        renderSnippets();
-    } else if (view === 'rte-editor') {
-        renderRichTextEditor();
-    } else if (view === 'ip-reputation') {
-        renderIpReputation();
-    } else if (view === 'dns-lookup') {
-        renderDnsLookup();
-    } else if (view === 'password-generator') {
-        renderPasswordGenerator();
-    } else if (view === 'users') {
-        renderUserManagement();
-    }
+    openTab(view);
 }
 
 // ============================================
@@ -381,7 +863,7 @@ function navigate(view) {
 async function renderDashboard() {
     setPageTitle('Dashboard', 'Your central workspace');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
 
     try {
         const commands = await api('GET', 'commands');
@@ -508,7 +990,7 @@ let commandSearchTimeout = null;
 async function renderCommands() {
     setPageTitle('Commands', 'Manage your Linux commands');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Loading commands...</span></div>';
 
     try {
@@ -690,7 +1172,7 @@ function attachCommandCardEvents() {
 async function renderCategoriesView() {
     setPageTitle('Categories', 'Manage command categories');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Loading categories...</span></div>';
 
     try {
@@ -922,7 +1404,7 @@ function anonymizeEmail(email) {
 function renderEmailAnonymizer() {
     setPageTitle('Email Anonymizer', 'Mask email addresses for privacy');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     body.innerHTML = `
         <div class="anon-wrap">
             <div class="anon-card">
@@ -1022,7 +1504,7 @@ function renderEmailAnonymizer() {
 function renderEmailHeaderViz() {
     setPageTitle('Header Visualizer', 'Parse and analyze email headers');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     body.innerHTML = `
         <div class="hdr-wrap">
             <div class="hdr-card">
@@ -1317,7 +1799,7 @@ X-Spam-Status: No`;
 function renderIpReputation() {
     setPageTitle('IP Reputation', 'Analyze IP addresses for security and reputation');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     const searchHistory = JSON.parse(localStorage.getItem('ip-history') || '[]');
 
     body.innerHTML = `
@@ -1678,7 +2160,7 @@ function renderIpReputation() {
 async function renderUserManagement() {
     setPageTitle('Manage Users', 'Create and manage user accounts');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Loading users...</span></div>';
 
     try {
@@ -1907,7 +2389,7 @@ async function confirmDeleteUser(id, username) {
 async function renderSnippets() {
     setPageTitle('Snippets', 'Save and copy standard email responses');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
 
     try {
         const snippets = await api('GET', 'snippets');
@@ -2331,28 +2813,19 @@ function toggleTheme() {
 }
 
 // ============================================
-// Sidebar (Collapse & Mobile)
+// Sidebar (Mobile)
 // ============================================
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    const isMobile = window.innerWidth <= 768;
-
-    if (isMobile) {
-        sidebar.classList.toggle('open');
-        let overlay = document.querySelector('.mobile-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.className = 'mobile-overlay';
-            overlay.addEventListener('click', closeSidebar);
-            document.body.appendChild(overlay);
-        }
-        overlay.classList.toggle('active', sidebar.classList.contains('open'));
-    } else {
-        sidebar.classList.toggle('collapsed');
-        state.sidebarCollapsed = sidebar.classList.contains('collapsed');
-        localStorage.setItem('toolhub-sidebar', state.sidebarCollapsed);
-        updateSidebarToggleIcon();
+    sidebar.classList.toggle('open');
+    let overlay = document.querySelector('.mobile-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'mobile-overlay';
+        overlay.addEventListener('click', closeSidebar);
+        document.body.appendChild(overlay);
     }
+    overlay.classList.toggle('active', sidebar.classList.contains('open'));
 }
 
 function closeSidebar() {
@@ -2362,41 +2835,18 @@ function closeSidebar() {
     if (overlay) overlay.classList.remove('active');
 }
 
-function updateSidebarToggleIcon() {
-    const sidebar = document.getElementById('sidebar');
-    const toggle = document.getElementById('sidebarToggle');
-    if (!toggle) return;
-    const icon = toggle.querySelector('i');
-    if (window.innerWidth <= 768) {
-        icon.className = 'fas fa-bars';
-    } else {
-        icon.className = sidebar.classList.contains('collapsed')
-            ? 'fas fa-chevron-right'
-            : 'fas fa-chevron-left';
-    }
-}
-
 function initSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    if (state.sidebarCollapsed && window.innerWidth > 768) {
-        sidebar.classList.add('collapsed');
-    }
-    updateSidebarToggleIcon();
-
     document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
 
     window.addEventListener('resize', () => {
-        if (window.innerWidth <= 768) {
-            sidebar.classList.remove('collapsed');
-        } else {
-            sidebar.classList.remove('open');
-            const overlay = document.querySelector('.mobile-overlay');
-            if (overlay) overlay.classList.remove('active');
-            if (state.sidebarCollapsed) {
-                sidebar.classList.add('collapsed');
-            }
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.remove('open');
+        const overlay = document.querySelector('.mobile-overlay');
+        if (overlay) overlay.classList.remove('active');
+        if (twState.discEl && twState.open) {
+            positionOverlayDisc();
+            updateWheel();
         }
-        updateSidebarToggleIcon();
     });
 }
 
@@ -2551,14 +3001,18 @@ async function initApp() {
         await handleLogout();
         appInited = false;
         document.getElementById('contentBody').innerHTML = '';
+        tabState.tabs = [];
+        tabState.activeTab = null;
+        renderTabBar();
         showLoginScreen();
     });
 
     try {
         await loadModules();
-        navigate('dashboard');
+        loadTabs();
     } catch (err) {
-        document.getElementById('contentBody').innerHTML = `
+        const body = getActiveBody();
+        body.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-exclamation-triangle"></i>
                 <h3>Connection Error</h3>
@@ -2590,7 +3044,7 @@ let rteState = {
 function renderRichTextEditor() {
     setPageTitle('Text Editor', 'Format and create rich text documents');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     rteState.templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');
 
     body.innerHTML = `
@@ -2726,7 +3180,7 @@ function renderRichTextEditor() {
             <div class="rte-action-bar">
                 <span class="rte-action-label"><i class="fas fa-copy"></i> Copy:</span>
                 <button class="rte-btn-copy-all" id="rteCopyAllBtn">
-                    <i class="fas fa-copy"></i> Copy All (with formatting)
+                    <i class="fas fa-copy"></i> Copy All
                 </button>
                 <button class="rte-btn-copy-plain" id="rteCopyPlainBtn">
                     <i class="fas fa-file-lines"></i> Plain Text
@@ -2740,6 +3194,7 @@ function renderRichTextEditor() {
                 <button class="rte-quicknote-btn" id="rteQuickNoteBtn">
                     <span class="rte-quicknote-icon"><i class="fas fa-bolt"></i></span>
                     <span class="rte-quicknote-text">Quick Note</span>
+                    <span class="rte-qn-badge" id="rteQnBadge"></span>
                 </button>
             </div>
         </div>
@@ -2773,6 +3228,7 @@ function rteInit() {
     rteState.editor = document.getElementById('rteEditor');
 
     rteLoadContent();
+    rteAutoLink();
     rteInitToolbar();
     rteInitEditorEvents();
     rteInitImageObserver();
@@ -3063,10 +3519,42 @@ function rteHandleCommand(cmd) {
     rteUpdateStats();
 }
 
+function rteAutoLink() {
+    const ed = rteState.editor;
+    if (!ed) return;
+    const urlRe = /(?<!["\'>])(https?:\/\/[^\s<>"')\]]+|www\.[^\s<>"')\]]+\.[^\s<>"')\]]+)/gi;
+    const walk = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walk.nextNode()) textNodes.push(walk.currentNode);
+
+    for (const node of textNodes) {
+        if (node.parentNode && node.parentNode.closest && node.parentNode.closest('a[href]')) continue;
+        const text = node.textContent;
+        if (!urlRe.test(text)) { urlRe.lastIndex = 0; continue; }
+        urlRe.lastIndex = 0;
+        const frag = document.createDocumentFragment();
+        let lastIdx = 0;
+        let match;
+        while ((match = urlRe.exec(text)) !== null) {
+            if (match.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+            const url = match[0].startsWith('http') ? match[0] : 'https://' + match[0];
+            const a = document.createElement('a');
+            a.href = url;
+            a.textContent = match[0];
+            a.target = '_blank';
+            frag.appendChild(a);
+            lastIdx = match.index + match[0].length;
+        }
+        if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+        node.parentNode.replaceChild(frag, node);
+    }
+}
+
 function rteInitEditorEvents() {
     const ed = rteState.editor;
 
     ed.addEventListener('input', () => {
+        rteAutoLink();
         rteUpdateStats();
         rteScheduleAutoSave();
     });
@@ -3441,6 +3929,7 @@ function rteHandlePaste(e) {
     const text = e.clipboardData.getData('text/plain');
     if (text) {
         document.execCommand('insertText', false, text);
+        rteAutoLink();
     }
     rteScheduleAutoSave();
 }
@@ -3751,7 +4240,7 @@ function rteCopyFormatted() {
         if (btn) {
             const orig = btn.innerHTML;
             btn.classList.add('copied');
-            btn.innerHTML = '<i class="fas fa-check"></i> Copied! Ready to paste';
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
             setTimeout(() => {
                 btn.classList.remove('copied');
                 btn.innerHTML = orig;
@@ -3768,7 +4257,7 @@ function rteCopyFormatted() {
         });
         navigator.clipboard.write([clipboardItem]).then(() => {
             showCopied();
-            toast('Content with formatting copied! Paste into your ticket system.', 'success');
+            toast('Content copied!', 'success');
         }).catch(() => {
             navigator.clipboard.writeText(html).then(() => {
                 showCopied();
@@ -4268,10 +4757,19 @@ function rteDeleteQuickNote(idx) {
     rteRenderNotes();
 }
 
+function rteUpdateNoteCounter() {
+    const badge = document.getElementById('rteQnBadge');
+    if (!badge) return;
+    const notes = JSON.parse(localStorage.getItem('rte-quicknotes') || '[]');
+    badge.textContent = notes.length;
+    badge.style.display = notes.length > 0 ? '' : 'none';
+}
+
 function rteRenderNotes() {
     const list = document.getElementById('rteQnList');
     if (!list) return;
     const notes = JSON.parse(localStorage.getItem('rte-quicknotes') || '[]');
+    rteUpdateNoteCounter();
     if (!notes.length) {
         list.innerHTML = '<div class="rte-qn-empty"><i class="fas fa-clipboard"></i> No notes yet</div>';
         return;

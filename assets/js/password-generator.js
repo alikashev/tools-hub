@@ -303,7 +303,7 @@ function pgEscHtml(s) {
 function renderPasswordGenerator() {
     setPageTitle('Password Generator', 'Create secure, custom passwords instantly');
 
-    const body = document.getElementById('contentBody');
+    const body = getActiveBody();
     pgState.showPassword = false;
     pgState.showAdvanced = false;
     pgState.showHistory = false;
