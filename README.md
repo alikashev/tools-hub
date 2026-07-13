@@ -1,4 +1,4 @@
-# Tool Hub
+# ficksie
 
 A modular web application for managing developer tools — store Linux commands, save email response snippets, anonymize email addresses, and more. Built with PHP + MySQL and a vanilla JavaScript SPA frontend.
 

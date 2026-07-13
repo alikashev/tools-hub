@@ -1,6 +1,6 @@
 <?php
 /**
- * Tool Hub - Entry Point
+ * ficksie - Entry Point
  *
  * Serves the main SPA HTML shell.
  * All API routes are handled by api/index.php via .htaccess rewriting.
@@ -18,7 +18,7 @@ $appName = APP_NAME;
     <meta name="color-scheme" content="dark">
     <title><?= $appName ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=202607139">
 </head>
 <body>
     <div id="app">
@@ -54,7 +54,7 @@ $appName = APP_NAME;
             <header class="content-header">
                 <div class="header-left">
                     <h1 id="pageTitle">Dashboard</h1>
-                    <p id="pageSubtitle" class="text-muted">Welcome to <?= $appName ?></p>
+                    <p id="pageSubtitle" class="text-muted">Niet moeilijk doen. <?= $appName ?> het ff</p>
                 </div>
                 <div class="header-actions">
                     <button class="btn btn-icon" id="themeToggle" title="Toggle theme">
@@ -225,7 +225,7 @@ $appName = APP_NAME;
                     <i class="fas fa-cubes"></i>
                 </div>
                 <h1 class="login-title"><?= $appName ?></h1>
-                <p class="login-subtitle">Sign in to access your tools</p>
+                <p class="login-subtitle">Niet moeilijk doen. <?= $appName ?> het ff</p>
 
                 <!-- Login Form -->
                 <form id="loginForm">
@@ -277,7 +277,9 @@ $appName = APP_NAME;
 
     <!-- Toast container -->
     <div class="toast-container" id="toastContainer"></div>
+<script src="assets/js/dns.js?v=202607138"></script>
+<script src="assets/js/password-generator.js?v=202607138"></script>
 
-    <script src="assets/js/app.js"></script>
+    <script src="assets/js/app.js?v=202607138"></script>
 </body>
 </html>

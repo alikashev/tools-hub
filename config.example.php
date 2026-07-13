@@ -1,6 +1,6 @@
 <?php
 /**
- * Tool Hub Configuration
+ * ficksie Configuration
  *
  * Copy this file to config.php and update the values.
  */
@@ -12,7 +12,7 @@ define('DB_USER', 'admin_toolshub');
 define('DB_PASS', 'HfE54mVDACfh8GzE95Zz');
 define('DB_CHARSET', 'utf8mb4');
 
-define('APP_NAME', 'Tool Hub');
+define('APP_NAME', 'ficksie');
 define('APP_URL', 'http://akxx.nl');
 define('APP_ENV', 'production'); // development | production
 define('DEBUG', false);

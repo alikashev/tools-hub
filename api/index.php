@@ -54,6 +54,9 @@ try {
         case 'ip-reputation':
             require __DIR__ . '/ip-reputation.php';
             break;
+        case 'dns':
+            require __DIR__ . '/dns.php';
+            break;
         default:
             Response::notFound('API endpoint not found');
     }

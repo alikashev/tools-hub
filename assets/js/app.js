@@ -1,5 +1,5 @@
 /**
- * Tool Hub - SPA Frontend
+ * ficksie - SPA Frontend
  */
 
 const API_BASE = 'api';
@@ -221,7 +221,7 @@ async function loadModules() {
 }
 
 const navState = {
-    expanded: { 'command-hub': true, 'email-tools': false, 'network-tools': true },
+    expanded: { 'command-hub': true, 'email-tools': false, 'network-tools': true, 'security-tools': false },
 };
 
 function renderNav() {
@@ -260,7 +260,7 @@ function renderNav() {
             label: 'Editor',
             icon: 'fa-pen-fancy',
             items: [
-                { view: 'rte-editor', icon: 'fa-file-lines', label: 'Rich Text Editor' },
+                { view: 'rte-editor', icon: 'fa-file-lines', label: 'Text Editor' },
             ],
         },
         {
@@ -269,6 +269,15 @@ function renderNav() {
             icon: 'fa-globe',
             items: [
                 { view: 'ip-reputation', icon: 'fa-shield-halved', label: 'IP Reputation' },
+                { view: 'dns-lookup', icon: 'fa-globe', label: 'DNS Lookup Suite' },
+            ],
+        },
+        {
+            key: 'security-tools',
+            label: 'Security',
+            icon: 'fa-lock',
+            items: [
+                { view: 'password-generator', icon: 'fa-key', label: 'Password Generator' },
             ],
         },
     ];
@@ -357,6 +366,10 @@ function navigate(view) {
         renderRichTextEditor();
     } else if (view === 'ip-reputation') {
         renderIpReputation();
+    } else if (view === 'dns-lookup') {
+        renderDnsLookup();
+    } else if (view === 'password-generator') {
+        renderPasswordGenerator();
     } else if (view === 'users') {
         renderUserManagement();
     }
@@ -411,11 +424,25 @@ async function renderDashboard() {
                 color: '#f59e0b',
             },
             {
+                key: 'dns-lookup',
+                icon: 'fa-globe',
+                name: 'DNS Lookup Suite',
+                desc: 'Comprehensive DNS health analysis for any domain',
+                color: '#06b6d4',
+            },
+            {
                 key: 'rte-editor',
                 icon: 'fa-file-lines',
-                name: 'Rich Text Editor',
+                name: 'Text Editor',
                 desc: 'Create and format rich text documents with templates and variables',
                 color: '#ec4899',
+            },
+            {
+                key: 'password-generator',
+                icon: 'fa-key',
+                name: 'Password Generator',
+                desc: 'Create secure, custom passwords with advanced options',
+                color: '#8b5cf6',
             },
         ];
 
@@ -2543,7 +2570,7 @@ async function initApp() {
 }
 
 // ============================================
-// Rich Text Editor
+// Text Editor
 // ============================================
 
 const rteColors = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#6c63ff','#a855f7','#ec4899','#64748b'];
@@ -2551,8 +2578,6 @@ const rteHighlights = ['#fef08a','#fde68a','#a7f3d0','#bfdbfe','#c4b5fd','#fbcfe
 const rteEmojis = ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😜','🤔','🤗','😩','😢','😭','😤','😡','🥺','😱','🤯','🥳','😴','👍','👎','👏','🙌','💪','🤝','✨','🔥','⭐','💡','📝','📌','🎯','🚀','✅','❌','❓','❗','💬','📧','🔗','🎉','💻','🖥️','📁','📂','📄','📅','⏰','🔒','🔓','💎','🌐','⚡','🎈','🏆','💯'];
 const rteFontSizes = ['8','10','12','14','16','18','20','24','28','32','36','48','64'];
 const rteFontFamilies = ['Arial','Georgia','Impact','Tahoma','Times New Roman','Trebuchet MS','Verdana','Courier New','Segoe UI','Inter'];
-
-const rteVars = ['{{customer_name}}','{{domain}}','{{ticket_id}}','{{customer_email}}','{{account_number}}','{{server_name}}','{{ip_address}}','{{billing_date}}','{{support_email}}','{{company_name}}'];
 
 let rteState = {
     editor: null,
@@ -2563,7 +2588,7 @@ let rteState = {
 };
 
 function renderRichTextEditor() {
-    setPageTitle('Rich Text Editor', 'Format and create rich text documents');
+    setPageTitle('Text Editor', 'Format and create rich text documents');
 
     const body = document.getElementById('contentBody');
     rteState.templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');
@@ -2667,26 +2692,6 @@ function renderRichTextEditor() {
                 </div>
             </div>
 
-            <div class="rte-action-bar">
-                <span class="rte-action-label"><i class="fas fa-copy"></i> Copy:</span>
-                <button class="rte-btn-copy-all" id="rteCopyAllBtn">
-                    <i class="fas fa-copy"></i> Copy All (with formatting)
-                </button>
-                <button class="rte-btn-copy-plain" id="rteCopyPlainBtn">
-                    <i class="fas fa-file-lines"></i> Plain Text
-                </button>
-                <div class="rte-export-group">
-                    <button class="rte-export-btn" id="rteExportHtmlBtn"><i class="fas fa-code"></i> HTML</button>
-                    <button class="rte-export-btn" id="rteExportMdBtn"><i class="fas fa-markdown"></i> MD</button>
-                    <button class="rte-export-btn" id="rteExportTxtBtn"><i class="fas fa-file-export"></i> TXT</button>
-                </div>
-            </div>
-
-            <div class="rte-variables-bar">
-                <span class="rte-variables-label"><i class="fas fa-at"></i> Vars:</span>
-                ${rteVars.map(v => `<button class="rte-var-btn" data-var="${v}"><code>${v}</code></button>`).join('')}
-            </div>
-
             <div class="rte-templates-bar" id="rteTemplatesBar">
                 <span class="rte-variables-label"><i class="fas fa-reply"></i> Templates:</span>
                 <button class="rte-template-btn" id="rteSaveTemplateBtn"><i class="fas fa-floppy-disk"></i> Save as template</button>
@@ -2717,8 +2722,49 @@ function renderRichTextEditor() {
                     </div>
                 </div>
             </div>
+
+            <div class="rte-action-bar">
+                <span class="rte-action-label"><i class="fas fa-copy"></i> Copy:</span>
+                <button class="rte-btn-copy-all" id="rteCopyAllBtn">
+                    <i class="fas fa-copy"></i> Copy All (with formatting)
+                </button>
+                <button class="rte-btn-copy-plain" id="rteCopyPlainBtn">
+                    <i class="fas fa-file-lines"></i> Plain Text
+                </button>
+                <div class="rte-export-group">
+                    <button class="rte-export-btn" id="rteExportHtmlBtn"><i class="fas fa-code"></i> HTML</button>
+                    <button class="rte-export-btn" id="rteExportMdBtn"><i class="fas fa-markdown"></i> MD</button>
+                    <button class="rte-export-btn" id="rteExportTxtBtn"><i class="fas fa-file-export"></i> TXT</button>
+                </div>
+                <div class="rte-quicknote-sep"></div>
+                <button class="rte-quicknote-btn" id="rteQuickNoteBtn">
+                    <span class="rte-quicknote-icon"><i class="fas fa-bolt"></i></span>
+                    <span class="rte-quicknote-text">Quick Note</span>
+                </button>
+            </div>
         </div>
     `;
+
+    // Quick Note Modal
+    const noteModal = document.createElement('div');
+    noteModal.id = 'rteQuickNoteModal';
+    noteModal.className = 'rte-qn-modal-overlay';
+    noteModal.innerHTML = `
+        <div class="rte-qn-modal">
+            <div class="rte-qn-header">
+                <div class="rte-qn-title"><i class="fas fa-bolt"></i> Quick Notes</div>
+                <button class="rte-qn-close" id="rteQnClose"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="rte-qn-body">
+                <div class="rte-qn-input-area">
+                    <textarea class="rte-qn-textarea" id="rteQnInput" placeholder="Type a note..." rows="3"></textarea>
+                    <button class="rte-qn-add-btn" id="rteQnAdd"><i class="fas fa-plus"></i> Save</button>
+                </div>
+                <div class="rte-qn-list" id="rteQnList"></div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(noteModal);
 
     rteInit();
 }
@@ -2732,6 +2778,7 @@ function rteInit() {
     rteInitImageObserver();
     rteRenderTemplates();
     rteUpdateStats();
+    rteInitQuickNotes();
 }
 
 function rteInitToolbar() {
@@ -2904,15 +2951,6 @@ function rteInitToolbar() {
         }
     }
     renderTableGrid();
-
-    // Variable buttons
-    document.querySelectorAll('.rte-var-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.execCommand('insertText', false, btn.dataset.var);
-            rteState.editor.focus();
-            rteScheduleAutoSave();
-        });
-    });
 
     // Copy All (with formatting) — the big button
     document.getElementById('rteCopyAllBtn').addEventListener('click', rteCopyFormatted);
@@ -3686,7 +3724,26 @@ function rteCopyPlainText() {
 }
 
 function rteCopyFormatted() {
-    const html = rteState.editor.innerHTML;
+    const rawHtml = rteState.editor.innerHTML;
+
+    const tmp = document.createElement('div');
+    tmp.innerHTML = rawHtml;
+    tmp.querySelectorAll('.rte-img-box').forEach(box => {
+        const img = box.querySelector('img');
+        if (img) {
+            const w = box.offsetWidth || img.naturalWidth;
+            if (w) {
+                img.setAttribute('width', w);
+                img.style.width = w + 'px';
+                img.style.height = 'auto';
+            }
+            box.parentNode.replaceChild(img, box);
+        }
+    });
+    tmp.querySelectorAll('[class]').forEach(el => {
+        el.removeAttribute('class');
+    });
+    const html = tmp.innerHTML;
     const plainText = rteConvertToPlainText();
 
     function showCopied() {
@@ -3727,7 +3784,25 @@ function rteCopyFormatted() {
 }
 
 function rteExportHTML() {
-    const html = rteState.editor.innerHTML;
+    const rawHtml = rteState.editor.innerHTML;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = rawHtml;
+    tmp.querySelectorAll('.rte-img-box').forEach(box => {
+        const img = box.querySelector('img');
+        if (img) {
+            const w = box.offsetWidth || img.naturalWidth;
+            if (w) {
+                img.setAttribute('width', w);
+                img.style.width = w + 'px';
+                img.style.height = 'auto';
+            }
+            box.parentNode.replaceChild(img, box);
+        }
+    });
+    tmp.querySelectorAll('[class]').forEach(el => {
+        el.removeAttribute('class');
+    });
+    const html = tmp.innerHTML;
     const fullHtml = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Document</title></head>
@@ -4141,6 +4216,80 @@ function rteRenderTemplates() {
                 rteDeleteTemplate(btn.dataset.tpl);
             }
         });
+    });
+}
+
+// ============================================
+// Quick Notes
+// ============================================
+function rteInitQuickNotes() {
+    const btn = document.getElementById('rteQuickNoteBtn');
+    const modal = document.getElementById('rteQuickNoteModal');
+    const closeBtn = document.getElementById('rteQnClose');
+    const addBtn = document.getElementById('rteQnAdd');
+    const input = document.getElementById('rteQnInput');
+    const list = document.getElementById('rteQnList');
+
+    btn.addEventListener('click', () => {
+        modal.classList.add('rte-qn-open');
+        input.focus();
+        rteRenderNotes();
+    });
+    closeBtn.addEventListener('click', () => modal.classList.remove('rte-qn-open'));
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('rte-qn-open');
+    });
+
+    addBtn.addEventListener('click', rteAddQuickNote);
+    input.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') rteAddQuickNote();
+    });
+
+    rteRenderNotes();
+}
+
+function rteAddQuickNote() {
+    const input = document.getElementById('rteQnInput');
+    const text = input.value.trim();
+    if (!text) return;
+    const notes = JSON.parse(localStorage.getItem('rte-quicknotes') || '[]');
+    notes.unshift({ text, created: new Date().toISOString() });
+    if (notes.length > 100) notes.length = 100;
+    localStorage.setItem('rte-quicknotes', JSON.stringify(notes));
+    input.value = '';
+    rteRenderNotes();
+    toast('Note saved!', 'success');
+}
+
+function rteDeleteQuickNote(idx) {
+    const notes = JSON.parse(localStorage.getItem('rte-quicknotes') || '[]');
+    notes.splice(idx, 1);
+    localStorage.setItem('rte-quicknotes', JSON.stringify(notes));
+    rteRenderNotes();
+}
+
+function rteRenderNotes() {
+    const list = document.getElementById('rteQnList');
+    if (!list) return;
+    const notes = JSON.parse(localStorage.getItem('rte-quicknotes') || '[]');
+    if (!notes.length) {
+        list.innerHTML = '<div class="rte-qn-empty"><i class="fas fa-clipboard"></i> No notes yet</div>';
+        return;
+    }
+    list.innerHTML = notes.map((n, i) => {
+        const t = new Date(n.created);
+        const time = t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' +
+                     t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        return `<div class="rte-qn-item">
+            <div class="rte-qn-item-text">${escHtml(n.text)}</div>
+            <div class="rte-qn-item-footer">
+                <span class="rte-qn-item-time"><i class="fas fa-clock"></i> ${time}</span>
+                <button class="rte-qn-item-del" data-idx="${i}" title="Delete"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>`;
+    }).join('');
+    list.querySelectorAll('.rte-qn-item-del').forEach(btn => {
+        btn.addEventListener('click', () => rteDeleteQuickNote(parseInt(btn.dataset.idx)));
     });
 }
 

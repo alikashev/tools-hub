@@ -1,4 +1,4 @@
--- Tool Hub Seed Data
+-- ficksie Seed Data
 
 -- Default modules
 INSERT INTO modules (key_name, name, icon, description, sort_order) VALUES

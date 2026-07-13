@@ -1,4 +1,4 @@
--- Tool Hub Database Schema
+-- ficksie Database Schema
 -- MySQL / MariaDB
 
 --CREATE DATABASE IF NOT EXISTS toolhub CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

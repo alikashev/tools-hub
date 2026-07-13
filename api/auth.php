@@ -1,5 +1,11 @@
 <?php
 
+// If accessed directly (not through index.php router), reroute
+if (!defined('API_ROUTER_ACTIVE')) {
+    require __DIR__ . '/index.php';
+    exit;
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 $parts = get_route_parts();
 $action = $parts[1] ?? null;
