@@ -19,7 +19,7 @@ $appName = APP_NAME;
     <title><?= $appName ?></title>
     <link rel="icon" type="image/png" href="ficksie_logo_nt.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/style.css?v=67">
+    <link rel="stylesheet" href="assets/css/style.css?v=68">
 </head>
 <body>
     <div id="app">
@@ -37,12 +37,52 @@ $appName = APP_NAME;
                 </button>
             </div>
 
-            <div class="tw-sidebar-wrap">
-                <button class="tw-trigger" id="twTrigger">
-                    <i class="fas fa-compass"></i>
-                    <span>Tool Wheel</span>
-                </button>
-            </div>
+            <nav class="sidebar-nav" id="sidebarNav">
+                <a class="nav-pill active" data-view="dashboard" title="Dashboard">
+                    <i class="fas fa-th-large"></i>
+                    <span class="nav-pill-label">Dashboard</span>
+                </a>
+                <a class="nav-pill" data-view="commands" title="Commands">
+                    <i class="fas fa-terminal"></i>
+                    <span class="nav-pill-label">Commands</span>
+                </a>
+                <a class="nav-pill" data-view="email-anonymizer" title="Email Anonymizer">
+                    <i class="fas fa-mask"></i>
+                    <span class="nav-pill-label">Email Anonymizer</span>
+                </a>
+                <a class="nav-pill" data-view="email-header-viz" title="Header Visualizer">
+                    <i class="fas fa-code-branch"></i>
+                    <span class="nav-pill-label">Header Visualizer</span>
+                </a>
+                <a class="nav-pill" data-view="snippets" title="Snippets">
+                    <i class="fas fa-reply"></i>
+                    <span class="nav-pill-label">Snippets</span>
+                </a>
+                <a class="nav-pill" data-view="rte-editor" title="Text Editor">
+                    <i class="fas fa-file-lines"></i>
+                    <span class="nav-pill-label">Text Editor</span>
+                </a>
+                <a class="nav-pill" data-view="ip-reputation" title="IP Reputation">
+                    <i class="fas fa-shield-halved"></i>
+                    <span class="nav-pill-label">IP Reputation</span>
+                </a>
+                <a class="nav-pill" data-view="dns-lookup" title="DNS Lookup">
+                    <i class="fas fa-globe"></i>
+                    <span class="nav-pill-label">DNS Lookup</span>
+                </a>
+                <a class="nav-pill" data-view="password-generator" title="Password Generator">
+                    <i class="fas fa-key"></i>
+                    <span class="nav-pill-label">Password Generator</span>
+                </a>
+                <a class="nav-pill" data-view="ssl-toolkit" title="SSL/TLS Toolkit">
+                    <i class="fas fa-shield-halved"></i>
+                    <span class="nav-pill-label">SSL/TLS Toolkit</span>
+                </a>
+                <a class="nav-pill admin-only" data-view="users" title="Manage Users">
+                    <i class="fas fa-users"></i>
+                    <span class="nav-pill-label">Manage Users</span>
+                </a>
+            </nav>
 
             <div class="sidebar-footer">
                 <div class="version-badge">v1.0.0</div>
@@ -280,17 +320,12 @@ $appName = APP_NAME;
         </div>
     </div>
 
-    <!-- Tool Wheel Overlay -->
-    <div class="tw-overlay" id="twOverlay">
-        <div class="tw-overlay-inner" id="twOverlayInner"></div>
-    </div>
-
     <!-- Toast container -->
     <div class="toast-container" id="toastContainer"></div>
 <script src="assets/js/dns.js?v=23"></script>
 <script src="assets/js/password-generator.js?v=21"></script>
 <script src="assets/js/ssl-tools.js?v=8"></script>
 
-    <script src="assets/js/app.js?v=44"></script>
+    <script src="assets/js/app.js?v=45"></script>
 </body>
 </html>

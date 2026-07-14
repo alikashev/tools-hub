@@ -358,7 +358,22 @@ function closeTab(tabId) {
 }
 
 function updateNavActive(view) {
-    if (typeof twSetActive === 'function') twSetActive(view);
+    document.querySelectorAll('.nav-pill').forEach(pill => {
+        pill.classList.toggle('active', pill.dataset.view === view);
+    });
+}
+
+function initSidebarNav() {
+    document.querySelectorAll('.nav-pill').forEach(pill => {
+        if (pill.dataset.view === 'users' && !isAdmin()) {
+            pill.style.display = 'none';
+            return;
+        }
+        pill.addEventListener('click', (e) => {
+            e.preventDefault();
+            navigate(pill.dataset.view);
+        });
+    });
 }
 
 function loadTabs() {
@@ -411,445 +426,6 @@ function loadTabs() {
 // ============================================
 async function loadModules() {
     state.modules = await api('GET', 'modules');
-    initToolWheel();
-}
-
-// ============================================
-// Tool Wheel Navigation
-// ============================================
-const twState = {
-    tools: [],
-    angle: 0,
-    selectedIdx: 0,
-    radius: 290,
-    segAngle: 36,
-    overlayEl: null,
-    viewportEl: null,
-    discEl: null,
-    open: false,
-    tweenRAF: null,
-    dragMoved: false,
-    dragging: false,
-    dragStartY: 0,
-    dragStartAngle: 0,
-    dragLastY: 0,
-    dragLastTime: 0,
-    velocity: 0,
-    animating: false,
-    wheelCooldown: false,
-};
-
-function twSectorPath(startDeg, endDeg, innerR, outerR) {
-    if (innerR === undefined) innerR = 0;
-    if (outerR === undefined) outerR = 50;
-    const pts = [];
-    const steps = 20;
-    for (let i = 0; i <= steps; i++) {
-        const deg = startDeg + (endDeg - startDeg) * (i / steps);
-        const rad = (deg - 90) * Math.PI / 180;
-        pts.push(`${(50 + outerR * Math.cos(rad)).toFixed(2)}% ${(50 + outerR * Math.sin(rad)).toFixed(2)}%`);
-    }
-    if (innerR > 0) {
-        for (let i = steps; i >= 0; i--) {
-            const deg = startDeg + (endDeg - startDeg) * (i / steps);
-            const rad = (deg - 90) * Math.PI / 180;
-            pts.push(`${(50 + innerR * Math.cos(rad)).toFixed(2)}% ${(50 + innerR * Math.sin(rad)).toFixed(2)}%`);
-        }
-    } else {
-        pts.unshift('50.00% 50.00%');
-    }
-    return `polygon(${pts.join(',')})`;
-}
-
-function twSliceColor(i, total) {
-    return 'rgba(8, 8, 16, 0.95)';
-}
-
-function initToolWheel() {
-    const btn = document.getElementById('twTrigger');
-    if (!btn) return;
-
-    twState.tools = [
-        { view: 'dashboard', icon: 'fa-th-large', label: 'Dashboard', color: '#818cf8' },
-        { view: 'commands', icon: 'fa-list', label: 'Commands', color: '#a78bfa' },
-        { view: 'email-anonymizer', icon: 'fa-mask', label: 'Email Anon', color: '#34d399' },
-        { view: 'email-header-viz', icon: 'fa-code-branch', label: 'Header Viz', color: '#60a5fa' },
-        { view: 'snippets', icon: 'fa-reply', label: 'Snippets', color: '#2dd4bf' },
-        { view: 'rte-editor', icon: 'fa-file-lines', label: 'Text Editor', color: '#fbbf24' },
-        { view: 'ip-reputation', icon: 'fa-shield-halved', label: 'IP Rep', color: '#f87171' },
-        { view: 'dns-lookup', icon: 'fa-globe', label: 'DNS Lookup', color: '#38bdf8' },
-        { view: 'password-generator', icon: 'fa-key', label: 'Pass Gen', color: '#c084fc' },
-        { view: 'ssl-toolkit', icon: 'fa-shield-halved', label: 'SSL/TLS', color: '#34d399' },
-    ];
-    if (isAdmin()) twState.tools.push({ view: 'users', icon: 'fa-users', label: 'Users', color: '#fb923c' });
-    twState.segAngle = 360 / twState.tools.length;
-
-    twState.overlayEl = document.getElementById('twOverlay');
-
-    btn.addEventListener('click', () => {
-        if (twState.open) closeWheel();
-        else openWheel();
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && twState.open) closeWheel();
-    });
-}
-
-function openWheel() {
-    if (twState.open) return;
-    twState.open = true;
-
-    const overlay = twState.overlayEl;
-    const inner = document.getElementById('twOverlayInner');
-    inner.innerHTML = '';
-
-    overlay.classList.add('active');
-
-    const viewport = document.createElement('div');
-    viewport.className = 'tw-viewport';
-
-    const disc = document.createElement('div');
-    disc.className = 'tw-disc';
-
-    const indicator = document.createElement('div');
-    indicator.className = 'tw-indicator-top';
-
-    const hubLogo = document.createElement('div');
-    hubLogo.className = 'tw-hub-logo';
-    hubLogo.innerHTML = '<img src="ficksie_logo_nt.png" alt="ficksie">';
-
-    const dist = 0.72;
-
-    twState.tools.forEach((tool, i) => {
-        const startA = i * twState.segAngle;
-        const endA = (i + 1) * twState.segAngle;
-        const midA = startA + twState.segAngle / 2;
-
-        const gap = 1.5;
-        const borderGap = 0.3;
-
-        const border = document.createElement('div');
-        border.className = 'tw-border';
-        border.style.clipPath = twSectorPath(startA + borderGap, endA - borderGap, 48, 50);
-        border.style.webkitClipPath = twSectorPath(startA + borderGap, endA - borderGap, 48, 50);
-        border.style.setProperty('--tw-start-deg', startA + 'deg');
-        border.style.setProperty('--tw-span-deg', twState.segAngle + 'deg');
-
-        const slice = document.createElement('div');
-        slice.className = 'tw-slice';
-        slice.style.clipPath = twSectorPath(startA + gap, endA - gap, 0, 42);
-        slice.style.webkitClipPath = twSectorPath(startA + gap, endA - gap, 0, 42);
-        slice.style.background = twSliceColor(i, twState.tools.length);
-
-        const content = document.createElement('div');
-        content.className = 'tw-slice-content';
-        content.dataset.view = tool.view;
-
-        const midRad = (midA - 90) * Math.PI / 180;
-        const cx = 50 + dist * 50 * Math.cos(midRad);
-        const cy = 50 + dist * 50 * Math.sin(midRad);
-        content.style.left = cx + '%';
-        content.style.top = cy + '%';
-
-        content.innerHTML = `<i class="fas ${tool.icon}"></i><span>${tool.label}</span>`;
-        content.querySelector('i').style.color = tool.color;
-        content.querySelector('span').style.color = tool.color;
-        content.style.setProperty('--tw-tool-color', tool.color);
-        content.addEventListener('click', () => {
-            if (!twState.dragMoved) {
-                navigate(tool.view);
-                closeWheel();
-            }
-        });
-
-        slice.appendChild(content);
-        disc.appendChild(border);
-        disc.appendChild(slice);
-
-        tool.slice = slice;
-        tool.border = border;
-        tool.content = content;
-        tool.midAngle = midA;
-    });
-
-    viewport.appendChild(disc);
-    viewport.appendChild(hubLogo);
-    viewport.appendChild(indicator);
-    inner.appendChild(viewport);
-
-    twState.viewportEl = viewport;
-    twState.discEl = disc;
-
-    positionOverlayDisc();
-
-    const currentIdx = twState.tools.findIndex(t => t.view === state.currentView);
-    if (currentIdx >= 0) {
-        twState.angle = -currentIdx * twState.segAngle - twState.segAngle / 2;
-        twState.selectedIdx = currentIdx;
-    }
-
-    viewport.addEventListener('wheel', twOnWheel, { passive: false });
-    viewport.addEventListener('mousedown', twOnDragStart);
-    document.addEventListener('mousemove', twOnDragMove);
-    document.addEventListener('mouseup', twOnDragEnd);
-    viewport.addEventListener('touchstart', twOnTouchStart, { passive: false });
-    document.addEventListener('touchmove', twOnTouchMove, { passive: false });
-    document.addEventListener('touchend', twOnTouchEnd);
-
-    overlay.addEventListener('click', twOnOverlayBgClick);
-
-    updateWheel();
-}
-
-function closeWheel() {
-    if (!twState.open) return;
-    twState.open = false;
-
-    const overlay = twState.overlayEl;
-    overlay.classList.remove('active');
-
-    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
-    twState.tweenRAF = null;
-    twState.animating = false;
-
-    if (twState.viewportEl) {
-        twState.viewportEl.removeEventListener('wheel', twOnWheel);
-        twState.viewportEl.removeEventListener('mousedown', twOnDragStart);
-        twState.viewportEl.removeEventListener('touchstart', twOnTouchStart);
-    }
-    document.removeEventListener('mousemove', twOnDragMove);
-    document.removeEventListener('mouseup', twOnDragEnd);
-    document.removeEventListener('touchmove', twOnTouchMove);
-    document.removeEventListener('touchend', twOnTouchEnd);
-    overlay.removeEventListener('click', twOnOverlayBgClick);
-
-    twState.discEl = null;
-    twState.viewportEl = null;
-    document.getElementById('twOverlayInner').innerHTML = '';
-}
-
-function twOnOverlayBgClick(e) {
-    if (e.target === twState.overlayEl || e.target.id === 'twOverlayInner') {
-        closeWheel();
-    }
-}
-
-function positionOverlayDisc() {
-    const disc = twState.discEl;
-    const vp = twState.viewportEl;
-    if (!disc || !vp) return;
-    const r = twState.radius;
-    const d = r * 2;
-    disc.style.width = d + 'px';
-    disc.style.height = d + 'px';
-    disc.style.left = (vp.offsetWidth / 2 - r) + 'px';
-    disc.style.top = (vp.offsetHeight / 2 - r) + 'px';
-}
-
-function updateWheel() {
-    const { tools, angle, discEl } = twState;
-    if (!discEl) return;
-
-    discEl.style.transform = `rotate(${angle}deg)`;
-
-    let closestIdx = 0;
-    let closestDist = Infinity;
-
-    tools.forEach((tool, i) => {
-        tool.content.style.transform = `translate(-50%, -50%) rotate(${-angle}deg)`;
-
-        let effDeg = (tool.midAngle + angle) % 360;
-        if (effDeg > 180) effDeg -= 360;
-        if (effDeg < -180) effDeg += 360;
-        if (Math.abs(effDeg) < closestDist) {
-            closestDist = Math.abs(effDeg);
-            closestIdx = i;
-        }
-    });
-
-    tools.forEach((tool, i) => {
-        const sel = i === closestIdx;
-        tool.content.classList.toggle('tw-selected', sel);
-        tool.slice.classList.toggle('tw-slice-active', sel);
-        tool.border.classList.toggle('tw-border-active', sel);
-    });
-    twState.selectedIdx = closestIdx;
-}
-
-function twSnapTarget() {
-    const { tools, angle, segAngle } = twState;
-    let best = 0, bestDist = Infinity;
-    for (let i = 0; i < tools.length; i++) {
-        const target = -i * segAngle - segAngle / 2;
-        let dist = Math.abs(angle - target);
-        if (dist > 180) dist = 360 - dist;
-        if (dist < bestDist) { bestDist = dist; best = target; }
-    }
-    while (best - angle > 180) best -= 360;
-    while (angle - best > 180) best += 360;
-    return best;
-}
-
-function twSnapToIdx(idx, duration) {
-    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
-    twState.velocity = 0;
-    twState.animating = false;
-
-    const target = -idx * twState.segAngle - twState.segAngle / 2;
-    let diff = target - twState.angle;
-    while (diff > 180) diff -= 360;
-    while (diff < -180) diff += 360;
-
-    const startAngle = twState.angle;
-    const startTime = performance.now();
-    const dur = duration || 300;
-
-    function tick(time) {
-        const elapsed = time - startTime;
-        let t = Math.min(1, elapsed / dur);
-        t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        twState.angle = startAngle + diff * t;
-        updateWheel();
-        if (t < 1) {
-            twState.tweenRAF = requestAnimationFrame(tick);
-        } else {
-            twState.angle = target;
-            updateWheel();
-            twState.tweenRAF = null;
-        }
-    }
-    twState.tweenRAF = requestAnimationFrame(tick);
-}
-
-function startWheelAnim() {
-    if (twState.animating) return;
-    twState.animating = true;
-    requestAnimationFrame(twTick);
-}
-
-function twTick() {
-    if (!twState.animating) return;
-    let settled = true;
-
-    if (!twState.dragging) {
-        twState.angle += twState.velocity;
-        twState.velocity *= 0.93;
-
-        if (Math.abs(twState.velocity) > 0.06) {
-            settled = false;
-        } else {
-            const target = twSnapTarget();
-            const diff = target - twState.angle;
-            if (Math.abs(diff) > 0.08) {
-                twState.velocity += diff * 0.12;
-                twState.velocity *= 0.8;
-                settled = false;
-            } else {
-                twState.angle = target;
-                twState.velocity = 0;
-            }
-        }
-    }
-
-    updateWheel();
-
-    if (settled) {
-        twState.animating = false;
-    } else {
-        requestAnimationFrame(twTick);
-    }
-}
-
-function twOnWheel(e) {
-    e.preventDefault();
-    if (twState.wheelCooldown) return;
-    twState.wheelCooldown = true;
-    setTimeout(() => { twState.wheelCooldown = false; }, 280);
-
-    const dir = e.deltaY > 0 ? 1 : -1;
-    let nextIdx = twState.selectedIdx + dir;
-    if (nextIdx < 0) nextIdx = twState.tools.length - 1;
-    if (nextIdx >= twState.tools.length) nextIdx = 0;
-
-    twSnapToIdx(nextIdx, 280);
-}
-
-function twOnDragStart(e) {
-    if (e.button !== 0) return;
-    twState.dragging = true;
-    twState.dragMoved = false;
-    twState.dragStartY = e.clientY;
-    twState.dragStartAngle = twState.angle;
-    twState.dragLastY = e.clientY;
-    twState.dragLastTime = Date.now();
-    twState.velocity = 0;
-    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
-}
-
-function twOnDragMove(e) {
-    if (!twState.dragging) return;
-    const dy = e.clientY - twState.dragStartY;
-    if (Math.abs(dy) > 3) twState.dragMoved = true;
-    const anglePerPx = 180 / (twState.radius || 200);
-    twState.angle = twState.dragStartAngle + dy * anglePerPx;
-    const now = Date.now();
-    const dt = now - twState.dragLastTime;
-    if (dt > 0) {
-        twState.velocity = ((e.clientY - twState.dragLastY) * anglePerPx) / dt * 16;
-    }
-    twState.dragLastY = e.clientY;
-    twState.dragLastTime = now;
-    updateWheel();
-}
-
-function twOnDragEnd() {
-    if (!twState.dragging) return;
-    twState.dragging = false;
-    startWheelAnim();
-}
-
-function twOnTouchStart(e) {
-    const t = e.touches[0];
-    twState.dragging = true;
-    twState.dragMoved = false;
-    twState.dragStartY = t.clientY;
-    twState.dragStartAngle = twState.angle;
-    twState.dragLastY = t.clientY;
-    twState.dragLastTime = Date.now();
-    twState.velocity = 0;
-    if (twState.tweenRAF) cancelAnimationFrame(twState.tweenRAF);
-}
-
-function twOnTouchMove(e) {
-    if (!twState.dragging) return;
-    e.preventDefault();
-    const t = e.touches[0];
-    const dy = t.clientY - twState.dragStartY;
-    if (Math.abs(dy) > 3) twState.dragMoved = true;
-    const anglePerPx = 180 / (twState.radius || 200);
-    twState.angle = twState.dragStartAngle + dy * anglePerPx;
-    const now = Date.now();
-    const dt = now - twState.dragLastTime;
-    if (dt > 0) {
-        twState.velocity = ((t.clientY - twState.dragLastY) * anglePerPx) / dt * 16;
-    }
-    twState.dragLastY = t.clientY;
-    twState.dragLastTime = now;
-    updateWheel();
-}
-
-function twOnTouchEnd() {
-    if (!twState.dragging) return;
-    twState.dragging = false;
-    startWheelAnim();
-}
-
-function twSetActive(view) {
-    if (!twState.open) return;
-    const idx = twState.tools.findIndex(t => t.view === view);
-    if (idx < 0) return;
-    twSnapToIdx(idx, 400);
 }
 
 // ============================================
@@ -1593,8 +1169,8 @@ function renderEmailHeaderViz() {
             if (v.includes('neutral') || v.includes('none')) return 'warn';
         }
         if (k === 'authentication-results') {
-            if (v.includes('dkim=pass') || v.includes('spf=pass') || v.includes('dmarc=pass')) return 'pass';
             if (v.includes('dkim=fail') || v.includes('spf=fail') || v.includes('dmarc=fail')) return 'fail';
+            if (v.includes('dkim=pass') || v.includes('spf=pass') || v.includes('dmarc=pass')) return 'pass';
             if (v.includes('dkim=neutral') || v.includes('spf=neutral') || v.includes('dmarc=neutral')) return 'warn';
         }
         if (k === 'x-spam-flag' || k === 'x-spam-status') {
@@ -1613,6 +1189,141 @@ function renderEmailHeaderViz() {
         if (status === 'fail') return '<i class="fas fa-times-circle"></i>';
         if (status === 'warn') return '<i class="fas fa-exclamation-triangle"></i>';
         return '';
+    }
+
+    function parseReceivedHeader(value) {
+        const result = { from: '', fromIp: '', by: '', byIp: '', protocol: '', timestamp: '', date: null };
+
+        const fromMatch = value.match(/from\s+(\S+?)(?:\s+\((?:\S+\s+)?\[?([0-9a-fA-F.:]+)\]?\))?/i);
+        if (fromMatch) {
+            result.from = fromMatch[1];
+            result.fromIp = fromMatch[2] || '';
+        }
+
+        const byMatch = value.match(/by\s+(\S+?)(?:\s+\((?:\S+\s+)?\[?([0-9a-fA-F.:]+)\]?\))?(?:\s+with)/i);
+        if (byMatch) {
+            result.by = byMatch[1];
+            result.byIp = byMatch[2] || '';
+        }
+
+        const withMatch = value.match(/with\s+(\S+)/i);
+        if (withMatch) result.protocol = withMatch[1];
+
+        const semiIdx = value.lastIndexOf(';');
+        if (semiIdx !== -1) {
+            const ts = value.slice(semiIdx + 1).trim();
+            result.timestamp = ts;
+            const parsed = new Date(ts);
+            if (!isNaN(parsed.getTime())) result.date = parsed;
+        }
+
+        return result;
+    }
+
+    function extractDomain(headerValue) {
+        const m = headerValue.match(/@([a-zA-Z0-9._-]+)/);
+        return m ? m[1].toLowerCase() : '';
+    }
+
+    function extractDkimDomain(dkimValue) {
+        const m = dkimValue.match(/d=([a-zA-Z0-9._-]+)/i);
+        return m ? m[1].toLowerCase() : '';
+    }
+
+    function detectIssues(headers, auth, alerts, routing, overview) {
+        const issues = [];
+
+        const hasAuthResults = auth.some(h => h.key.toLowerCase() === 'authentication-results');
+        const hasSpf = auth.some(h => h.key.toLowerCase() === 'received-spf');
+
+        if (!hasAuthResults && !hasSpf) {
+            issues.push({ level: 'fail', msg: 'No authentication results found (missing Authentication-Results and Received-SPF)' });
+        } else if (!hasAuthResults) {
+            issues.push({ level: 'warn', msg: 'No Authentication-Results header found' });
+        } else if (!hasSpf) {
+            issues.push({ level: 'warn', msg: 'No Received-SPF header found' });
+        }
+
+        auth.forEach(h => {
+            const k = h.key.toLowerCase();
+            const v = h.value.toLowerCase();
+            if (k === 'received-spf') {
+                if (v.includes('softfail')) issues.push({ level: 'fail', msg: 'SPF softfail — sender is not authorized but not explicitly rejected' });
+                else if (v.includes('fail')) issues.push({ level: 'fail', msg: 'SPF fail — sender is not authorized to send from this domain' });
+                else if (v.includes('neutral')) issues.push({ level: 'warn', msg: 'SPF neutral — domain makes no assertion about the sender' });
+                else if (v.includes('none')) issues.push({ level: 'warn', msg: 'SPF none — no SPF record exists for this domain' });
+            }
+            if (k === 'authentication-results') {
+                if (v.includes('dkim=fail')) issues.push({ level: 'fail', msg: 'DKIM verification failed — email signature is invalid' });
+                if (v.includes('spf=fail')) issues.push({ level: 'fail', msg: 'SPF verification failed in Authentication-Results' });
+                if (v.includes('dmarc=fail')) issues.push({ level: 'fail', msg: 'DMARC verification failed — email does not pass DMARC policy' });
+                if (v.includes('dkim=none')) issues.push({ level: 'warn', msg: 'No DKIM signature found for this domain' });
+                if (v.includes('dmarc=none')) issues.push({ level: 'warn', msg: 'No DMARC policy found for this domain' });
+            }
+            if (k === 'dmarc-result') {
+                const v2 = h.value.toLowerCase();
+                if (v2.includes('fail') || v2.includes('reject') || v2.includes('quarantine')) {
+                    issues.push({ level: 'fail', msg: 'DMARC result: ' + h.value });
+                }
+            }
+        });
+
+        alerts.forEach(h => {
+            const k = h.key.toLowerCase();
+            if (k === 'x-spam-score') {
+                const num = parseFloat(h.value);
+                if (num > 5) issues.push({ level: 'fail', msg: 'High spam score: ' + num + ' — message is very likely spam' });
+                else if (num > 2) issues.push({ level: 'warn', msg: 'Moderate spam score: ' + num });
+            }
+            if (k === 'x-spam-flag') {
+                if (h.value.toLowerCase().includes('yes')) issues.push({ level: 'fail', msg: 'X-Spam-Flag: Yes — message is flagged as spam' });
+            }
+            if (k === 'x-spam-status') {
+                if (h.value.toLowerCase().includes('yes')) issues.push({ level: 'fail', msg: 'X-Spam-Status: Yes — message classified as spam' });
+            }
+            if (k === 'return-path') {
+                const fromHeader = overview.find(h2 => h2.key.toLowerCase() === 'from');
+                if (fromHeader) {
+                    const rpDomain = extractDomain(h.value);
+                    const fromDomain = extractDomain(fromHeader.value);
+                    if (rpDomain && fromDomain && rpDomain !== fromDomain) {
+                        issues.push({ level: 'warn', msg: 'Return-Path domain (' + rpDomain + ') does not match From domain (' + fromDomain + ')' });
+                    }
+                }
+            }
+        });
+
+        const dkimSig = headers.find(h => h.key.toLowerCase() === 'dkim-signature');
+        const fromHeader = overview.find(h => h.key.toLowerCase() === 'from');
+        if (dkimSig && fromHeader) {
+            const dkimDomain = extractDkimDomain(dkimSig.value);
+            const fromDomain = extractDomain(fromHeader.value);
+            if (dkimDomain && fromDomain && dkimDomain !== fromDomain) {
+                issues.push({ level: 'warn', msg: 'DKIM signed domain (' + dkimDomain + ') differs from From domain (' + fromDomain + ')' });
+            }
+        }
+
+        if (routing.length > 1) {
+            const parsedHops = routing.map(h => parseReceivedHeader(h.value)).filter(h => h.date);
+            for (let i = 0; i < parsedHops.length - 1; i++) {
+                const curr = parsedHops[i];
+                const prev = parsedHops[i + 1];
+                const delta = (curr.date - prev.date) / 1000;
+                if (delta > 60) {
+                    issues.push({ level: 'fail', msg: 'Delivery delay of ' + formatDelta(delta) + ' between hop ' + (i + 2) + ' and hop ' + (i + 1) + ' of the delivery path' });
+                } else if (delta > 10) {
+                    issues.push({ level: 'warn', msg: 'Delivery delay of ' + formatDelta(delta) + ' between hop ' + (i + 2) + ' and hop ' + (i + 1) + ' of the delivery path' });
+                }
+            }
+        }
+
+        return issues;
+    }
+
+    function formatDelta(seconds) {
+        if (seconds >= 3600) return Math.round(seconds / 3600) + 'h ' + Math.round((seconds % 3600) / 60) + 'm';
+        if (seconds >= 60) return Math.round(seconds / 60) + 'm ' + Math.round(seconds % 60) + 's';
+        return Math.round(seconds) + 's';
     }
 
     function render() {
@@ -1636,7 +1347,6 @@ function renderEmailHeaderViz() {
 
         headers.forEach(h => {
             const cls = classifyHeader(h.key);
-            const status = getHeaderStatus(h.key, h.value);
             if (cls === 'overview') overview.push(h);
             else if (cls === 'routing') routing.push(h);
             else if (cls === 'auth') auth.push(h);
@@ -1644,13 +1354,39 @@ function renderEmailHeaderViz() {
             else other.push(h);
         });
 
+        const issues = detectIssues(headers, auth, alerts, routing, overview);
+        const failCount = issues.filter(i => i.level === 'fail').length;
+        const warnCount = issues.filter(i => i.level === 'warn').length;
+
         let html = '';
 
-        // Overview
+        if (issues.length) {
+            const titleClass = failCount > 0 ? 'has-fail' : 'warn-only';
+            const titleIcon = failCount > 0 ? 'fa-circle-exclamation' : 'fa-triangle-exclamation';
+            const titleText = failCount > 0
+                ? failCount + ' issue' + (failCount > 1 ? 's' : '') + ' found' + (warnCount > 0 ? ', ' + warnCount + ' warning' + (warnCount > 1 ? 's' : '') : '')
+                : warnCount + ' warning' + (warnCount > 1 ? 's' : '') + ' found';
+            html += `
+                <div class="hdr-issues">
+                    <div class="hdr-issues-title ${titleClass}">
+                        <i class="fas ${titleIcon}"></i> ${titleText}
+                    </div>
+                    <div class="hdr-issues-list">
+                        ${issues.map(i => `
+                            <div class="hdr-issue-item hdr-issue-${i.level}">
+                                <i class="fas ${i.level === 'fail' ? 'fa-times-circle' : 'fa-exclamation-triangle'}"></i>
+                                <span>${escHtml(i.msg)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+
         if (overview.length) {
+            const hasFail = overview.some(h => getHeaderStatus(h.key, h.value) === 'fail');
             html += `
                 <div class="hdr-section">
-                    <div class="hdr-section-title"><i class="fas fa-envelope"></i> Overview</div>
+                    <div class="hdr-section-title${hasFail ? ' has-errors' : ''}"><i class="fas fa-envelope"></i> Overview</div>
                     <div class="hdr-table">
                         ${overview.map(h => `
                             <div class="hdr-row">
@@ -1662,11 +1398,11 @@ function renderEmailHeaderViz() {
                 </div>`;
         }
 
-        // Authentication
         if (auth.length) {
+            const hasAuthFail = auth.some(h => getHeaderStatus(h.key, h.value) === 'fail');
             html += `
                 <div class="hdr-section">
-                    <div class="hdr-section-title"><i class="fas fa-shield-halved"></i> Authentication</div>
+                    <div class="hdr-section-title${hasAuthFail ? ' has-errors' : ''}"><i class="fas fa-shield-halved"></i> Authentication</div>
                     <div class="hdr-table">
                         ${auth.map(h => {
                             const status = getHeaderStatus(h.key, h.value);
@@ -1683,11 +1419,11 @@ function renderEmailHeaderViz() {
                 </div>`;
         }
 
-        // Alerts / Spam
         if (alerts.length) {
+            const hasAlertFail = alerts.some(h => { const s = getHeaderStatus(h.key, h.value); return s === 'fail' || s === 'warn'; });
             html += `
                 <div class="hdr-section">
-                    <div class="hdr-section-title"><i class="fas fa-bell"></i> Flags &amp; Alerts</div>
+                    <div class="hdr-section-title${hasAlertFail ? ' has-errors' : ''}"><i class="fas fa-bell"></i> Flags &amp; Alerts</div>
                     <div class="hdr-table">
                         ${alerts.map(h => {
                             const status = getHeaderStatus(h.key, h.value);
@@ -1704,24 +1440,57 @@ function renderEmailHeaderViz() {
                 </div>`;
         }
 
-        // Routing (Received)
         if (routing.length) {
+            const parsedHops = routing.map(h => parseReceivedHeader(h.value));
+            const deltas = [];
+            for (let i = 0; i < parsedHops.length - 1; i++) {
+                const curr = parsedHops[i];
+                const prev = parsedHops[i + 1];
+                if (curr.date && prev.date) {
+                    deltas[i] = (curr.date - prev.date) / 1000;
+                } else {
+                    deltas[i] = null;
+                }
+            }
+
+            const hasDelay = deltas.some(d => d !== null && d > 10);
             html += `
                 <div class="hdr-section">
-                    <div class="hdr-section-title"><i class="fas fa-route"></i> Delivery Path</div>
+                    <div class="hdr-section-title${hasDelay ? ' has-errors' : ''}"><i class="fas fa-route"></i> Delivery Path</div>
                     <div class="hdr-timeline">
                         ${routing.map((h, i) => {
                             const isFirst = i === 0;
                             const isLast = i === routing.length - 1;
+                            const p = parsedHops[i];
+                            const delta = deltas[i];
                             let label = 'Intermediate hop';
                             if (isFirst) label = 'Final delivery';
                             if (isLast) label = 'Originating';
+
+                            let hopClass = '';
+                            if (isFirst) hopClass = 'hdr-hop-last';
+                            else if (isLast) hopClass = 'hdr-hop-first';
+                            if (delta !== null && delta > 60) hopClass += ' hdr-hop-slow';
+                            else if (delta !== null && delta > 10) hopClass += ' hdr-hop-delayed';
+
+                            let metaHtml = '<div class="hdr-timeline-meta">';
+                            if (p.from) metaHtml += '<span><i class="fas fa-arrow-right"></i> ' + escHtml(p.from) + (p.fromIp ? ' [' + escHtml(p.fromIp) + ']' : '') + '</span>';
+                            if (p.by) metaHtml += '<span><i class="fas fa-arrow-left"></i> ' + escHtml(p.by) + (p.byIp ? ' [' + escHtml(p.byIp) + ']' : '') + '</span>';
+                            if (p.protocol) metaHtml += '<span><i class="fas fa-plug"></i> ' + escHtml(p.protocol) + '</span>';
+                            if (p.timestamp) metaHtml += '<span><i class="fas fa-clock"></i> ' + escHtml(p.timestamp) + '</span>';
+                            if (delta !== null && delta > 0) {
+                                const deltaClass = delta > 60 ? 'slow' : delta > 10 ? 'delayed' : '';
+                                metaHtml += '<span class="hdr-timeline-delta' + (deltaClass ? ' ' + deltaClass : '') + '"><i class="fas fa-hourglass-half"></i> +' + escHtml(formatDelta(delta)) + '</span>';
+                            }
+                            metaHtml += '</div>';
+
                             return `
-                                <div class="hdr-timeline-item ${isFirst ? 'hdr-hop-last' : isLast ? 'hdr-hop-first' : ''}">
+                                <div class="hdr-timeline-item ${hopClass}">
                                     <div class="hdr-timeline-dot"></div>
                                     <div class="hdr-timeline-body">
                                         <div class="hdr-timeline-label">${label}</div>
                                         <div class="hdr-timeline-content">${escHtml(h.value)}</div>
+                                        ${metaHtml}
                                     </div>
                                 </div>
                             `;
@@ -1730,7 +1499,6 @@ function renderEmailHeaderViz() {
                 </div>`;
         }
 
-        // Other headers
         if (other.length) {
             html += `
                 <div class="hdr-section">
@@ -1746,16 +1514,16 @@ function renderEmailHeaderViz() {
                 </div>`;
         }
 
-        // Summary bar
-        const passCount = [...auth, ...alerts].filter(h => getHeaderStatus(h.key, h.value) === 'pass').length;
-        const failCount = [...auth, ...alerts].filter(h => getHeaderStatus(h.key, h.value) === 'fail').length;
-        const warnCount = [...auth, ...alerts].filter(h => getHeaderStatus(h.key, h.value) === 'warn').length;
+        const authPassCount = auth.filter(h => getHeaderStatus(h.key, h.value) === 'pass').length;
+        const authFailCount = auth.filter(h => getHeaderStatus(h.key, h.value) === 'fail').length;
+        const authWarnCount = auth.filter(h => getHeaderStatus(h.key, h.value) === 'warn').length;
 
         html = `
             <div class="hdr-summary">
-                <span class="hdr-summary-item hdr-summary-ok"><i class="fas fa-check-circle"></i> ${passCount} passed</span>
-                <span class="hdr-summary-item hdr-summary-warn"><i class="fas fa-exclamation-triangle"></i> ${warnCount} warnings</span>
-                <span class="hdr-summary-item hdr-summary-err"><i class="fas fa-times-circle"></i> ${failCount} failures</span>
+                ${issues.length ? `<span class="hdr-summary-item hdr-summary-err"><i class="fas fa-circle-exclamation"></i> ${issues.length} issue${issues.length > 1 ? 's' : ''}</span>` : ''}
+                <span class="hdr-summary-item hdr-summary-ok"><i class="fas fa-check-circle"></i> ${authPassCount} passed</span>
+                <span class="hdr-summary-item hdr-summary-warn"><i class="fas fa-exclamation-triangle"></i> ${authWarnCount} warnings</span>
+                <span class="hdr-summary-item hdr-summary-err"><i class="fas fa-times-circle"></i> ${authFailCount} failures</span>
                 <span class="hdr-summary-item hdr-summary-total"><i class="fas fa-hashtag"></i> ${headers.length} headers</span>
             </div>
         ` + html;
@@ -1772,31 +1540,35 @@ function renderEmailHeaderViz() {
     });
 
     document.getElementById('hdrSampleBtn').addEventListener('click', () => {
-        input.value = `Return-Path: <bounce@example.com>
+        input.value = `Return-Path: <bounce@evil-spoof.com>
 Received: from mail-smtp-1.example.com (mail-smtp-1.example.com [203.0.113.5])
  by mx.example.org (Postfix) with ESMTPS id ABC123
- for <user@example.org>; Tue, 15 Jul 2025 10:30:45 +0000 (UTC)
+ for <user@example.org>; Tue, 15 Jul 2025 10:31:23 +0000 (UTC)
 Received: from smtp.internal.example.com (smtp.internal.example.com [10.0.0.45])
  by mail-smtp-1.example.com (Postfix) with ESMTP id XYZ789
  for <user@example.org>; Tue, 15 Jul 2025 10:30:44 +0000 (UTC)
-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=example.com;
+Received: from relay.spam-relay.net (relay.spam-relay.net [198.51.100.77])
+ by smtp.internal.example.com (Postfix) with ESMTP id QWE456
+ for <user@example.org>; Tue, 15 Jul 2025 10:25:12 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=evil-spoof.com;
  s=selector2025; t=1756789045;
  bh=abc123def456ghi789jkl==; h=From:To:Subject:Date;
  b=signaturedatahere
 From: "John Doe" <john@example.com>
 To: user@example.org
-Subject: Important meeting tomorrow
-Date: Tue, 15 Jul 2025 10:30:30 +0000
+Subject: Urgent: verify your account
+Date: Tue, 15 Jul 2025 10:25:00 +0000
 Message-ID: <msgid12345@example.com>
 MIME-Version: 1.0
 Content-Type: text/plain; charset="UTF-8"
-Received-SPF: pass (example.com: domain of john@example.com designates 203.0.113.5 as permitted sender)
+Received-SPF: softfail (example.com: domain of evil-spoof.com does not designate 203.0.113.5 as permitted sender)
 Authentication-Results: mx.example.org;
- dkim=pass (1024-bit key) header.d=example.com header.i=@example.com header.b=signaturedata;
- spf=pass (mx.example.org: domain of example.com designates 203.0.113.5 as permitted sender) smtp.mailfrom=example.com;
- dmarc=pass (p=REJECT) header.from=example.com
-X-Spam-Score: 1.2
-X-Spam-Status: No`;
+ dkim=fail (1024-bit key) header.d=evil-spoof.com header.i=@evil-spoof.com header.b=signaturedata;
+ spf=softfail smtp.mailfrom=evil-spoof.com smtp.rcptto=user@example.org;
+ dmarc=fail (p=REJECT) header.from=example.com
+X-Spam-Score: 6.8
+X-Spam-Flag: Yes
+X-Spam-Status: Yes, score=6.8 required=5.0 tests=AYES,RCVD_IN_DNSWL_NONE,T_RP_MATCHES_RCVD autolearn=ham`;
         render();
     });
 
@@ -2853,10 +2625,6 @@ function initSidebar() {
         sidebar.classList.remove('open');
         const overlay = document.querySelector('.mobile-overlay');
         if (overlay) overlay.classList.remove('active');
-        if (twState.discEl && twState.open) {
-            positionOverlayDisc();
-            updateWheel();
-        }
     });
 }
 
@@ -3006,6 +2774,7 @@ async function initApp() {
     initModals();
     initKeyboard();
     initSidebar();
+    initSidebarNav();
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);
     document.getElementById('logoutBtn').addEventListener('click', async () => {
         await handleLogout();

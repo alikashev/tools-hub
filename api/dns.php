@@ -93,8 +93,209 @@ if (isset($_GET['dig'])) {
     exit;
 }
 
-if (!preg_match('/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*\.[a-z]{2,}$/i', $domain)) {
-    Response::validationError(['domain' => 'A valid domain name is required.']);
+// IP scan action — separate from domain scan
+if (isset($_GET['ip_scan'])) {
+    $ip = isset($_GET['ip']) ? trim($_GET['ip']) : '';
+    if (!$ip || !filter_var($ip, FILTER_VALIDATE_IP)) {
+        Response::validationError(['ip' => 'A valid IP address is required.']);
+    }
+
+    $ipType = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? 'IPv4' : 'IPv6';
+
+    // PTR lookup
+    $ptr = ['status' => 'empty', 'hostname' => null];
+    try {
+        $hostname = @gethostbyaddr($ip);
+        if ($hostname && $hostname !== $ip) {
+            $ptr = ['status' => 'ok', 'hostname' => $hostname];
+        }
+    } catch (Throwable $e) {
+        $ptr = ['status' => 'error', 'error' => $e->getMessage()];
+    }
+
+    // RIPE stat WHOIS lookup
+    $ripe = ['status' => 'empty', 'records' => [], 'network' => null, 'organization' => null, 'abuse_email' => null, 'abuse_phone' => null, 'country' => null, 'rir' => null];
+    try {
+        $ripeRaw = @file_get_contents("https://stat.ripe.net/data/whois/data.json?resource=" . urlencode($ip));
+        if ($ripeRaw) {
+            $ripeData = json_decode($ripeRaw, true);
+            if ($ripeData && isset($ripeData['data']['records'])) {
+                $records = $ripeData['data']['records'];
+                $ripe['rir'] = $ripeData['data']['authorities'][0] ?? null;
+                foreach ($records as $group) {
+                    foreach ($group as $rec) {
+                        $key = $rec['key'] ?? '';
+                        $val = $rec['value'] ?? '';
+                        if (!$val) continue;
+                        $ripe['records'][] = ['key' => $key, 'value' => $val];
+                        if ($key === 'NetName') $ripe['network'] = $val;
+                        if ($key === 'OrgName' || $key === 'Organization') $ripe['organization'] = $val;
+                        if ($key === 'Country') $ripe['country'] = $val;
+                    }
+                }
+                // Abuse contact
+                $abuseRaw = @file_get_contents("https://stat.ripe.net/data/abuse-contact-finder/data.json?resource=" . urlencode($ip));
+                if ($abuseRaw) {
+                    $abuseData = json_decode($abuseRaw, true);
+                    if ($abuseData && !empty($abuseData['data']['abuse_contacts'])) {
+                        $ripe['abuse_email'] = $abuseData['data']['abuse_contacts'][0];
+                    }
+                }
+                if (!empty($ripe['records'])) {
+                    $ripe['status'] = 'ok';
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        $ripe['status'] = 'error';
+        $ripe['error'] = $e->getMessage();
+    }
+
+    // Simple health score for IP
+    $score = 100;
+    $errors = 0;
+    $warnings = 0;
+    if ($ptr['status'] !== 'ok') { $score -= 15; $warnings++; }
+    if ($ripe['status'] !== 'ok') { $score -= 10; $warnings++; }
+    if (!$ripe['abuse_email']) { $score -= 5; $warnings++; }
+    $score = max(0, min(100, $score));
+
+    Response::success([
+        'ip' => $ip,
+        'ip_type' => $ipType,
+        'domain' => $ip,
+        'ptr' => $ptr,
+        'ripe' => $ripe,
+        'health' => [
+            'score' => $score,
+            'grade' => $score >= 90 ? 'A' : ($score >= 80 ? 'B' : ($score >= 70 ? 'C' : ($score >= 50 ? 'D' : 'F'))),
+            'warnings' => $warnings,
+            'errors' => $errors,
+        ],
+        'query_time' => gmdate('c'),
+        'duration_ms' => 0,
+        'is_ip' => true,
+    ]);
+    exit;
+}
+
+// Domain availability check
+if (isset($_GET['check_domain'])) {
+    $checkDomain = strtolower(trim($_GET['check_domain']));
+    if (!$checkDomain || !preg_match('/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*\.[a-z]{2,}$/i', $checkDomain)) {
+        Response::validationError(['check_domain' => 'A valid domain name is required.']);
+    }
+
+    $available = null;
+    $method = null;
+    $details = null;
+
+    // Fire RDAP + HTTP WHOIS in parallel — max 5s total
+    $tld = getWhoisTld($checkDomain);
+    $rdapUrl = getRdapUrl($tld);
+    $mh = curl_multi_init();
+    $chRdap = null;
+    $chHttp = null;
+
+    if ($rdapUrl) {
+        $chRdap = curl_init($rdapUrl . $checkDomain);
+        curl_setopt_array($chRdap, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER     => ['Accept: application/rdap+json'],
+        ]);
+        curl_multi_add_handle($mh, $chRdap);
+    }
+
+    $chHttp = curl_init("https://www.whois.com/whois/" . urlencode($checkDomain));
+    curl_setopt_array($chHttp, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; DNSLookupSuite/1.0)',
+    ]);
+    curl_multi_add_handle($mh, $chHttp);
+
+    do {
+        $status = curl_multi_exec($mh, $active);
+        if ($active) curl_multi_select($mh, 1);
+    } while ($active && $status === CURLM_OK);
+
+    // Check RDAP result
+    if ($chRdap) {
+        $httpCode = curl_getinfo($chRdap, CURLINFO_HTTP_CODE);
+        if ($httpCode === 404) {
+            $available = true;
+            $method = 'rdap';
+            $details = 'Domain not found in RDAP database';
+        } elseif ($httpCode === 200) {
+            $available = false;
+            $method = 'rdap';
+            $details = 'Domain is registered';
+        }
+        curl_multi_remove_handle($mh, $chRdap);
+        curl_close($chRdap);
+    }
+
+    // Check HTTP WHOIS result
+    if ($available === null && $chHttp) {
+        $httpCode = curl_getinfo($chHttp, CURLINFO_HTTP_CODE);
+        $html = curl_multi_getcontent($chHttp);
+        if ($httpCode === 200 && !empty($html) && preg_match('/<pre[^>]*>(.*?)<\/pre>/is', $html, $m)) {
+            $lower = strtolower(html_entity_decode(trim($m[1])));
+            if (preg_match('/(no match for|not found|no data found|no entries found|domain not found|no matching record|status:\s*available)/i', $lower)) {
+                $available = true;
+                $method = 'http';
+                $details = 'Domain not found via HTTP WHOIS';
+            } elseif (preg_match('/(domain name:|domain:\s+\S|registrant:|creation date|registered:|registry domain id|registrar:|status:\s*not available|nameservers:)/i', $lower)) {
+                $available = false;
+                $method = 'http';
+                $details = 'Domain is registered (via HTTP WHOIS)';
+            }
+        }
+        curl_multi_remove_handle($mh, $chHttp);
+        curl_close($chHttp);
+    }
+    curl_multi_close($mh);
+
+    // Fast final check: DNS records (instant)
+    if ($available === null) {
+        $hasDns = false;
+        $aRecs = @dns_get_record($checkDomain, DNS_A);
+        if ($aRecs && count($aRecs) > 0) $hasDns = true;
+        if (!$hasDns) {
+            $mxRecs = @dns_get_record($checkDomain, DNS_MX);
+            if ($mxRecs && count($mxRecs) > 0) $hasDns = true;
+        }
+        if (!$hasDns) {
+            $nsRecs = @dns_get_record($checkDomain, DNS_NS);
+            if ($nsRecs && count($nsRecs) > 0) $hasDns = true;
+        }
+        if ($hasDns) {
+            $available = false;
+            $method = 'dns';
+            $details = 'Domain has DNS records';
+        } else {
+            $available = true;
+            $method = 'dns';
+            $details = 'No DNS records found';
+        }
+    }
+
+    Response::success([
+        'domain'   => $checkDomain,
+        'available' => $available,
+        'method'    => $method,
+        'details'   => $details,
+    ]);
+    exit;
+}
+
+$isIp = filter_var($domain, FILTER_VALIDATE_IP);
+
+if (!$isIp && !preg_match('/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*\.[a-z]{2,}$/i', $domain)) {
+    Response::validationError(['domain' => 'A valid domain name or IP address is required.']);
 }
 
 $domain = strtolower($domain);
@@ -144,6 +345,54 @@ function dnsQuery(string $domain, int $type): array
 {
     $records = @dns_get_record($domain, $type);
     return is_array($records) ? $records : [];
+}
+
+/** Query NS records via DNS-over-HTTPS (Cloudflare) for fresh results */
+function dnsQueryDoh(string $domain, string $type = 'NS'): array
+{
+    $typeMap = ['A' => 1, 'AAAA' => 28, 'CNAME' => 5, 'MX' => 15, 'TXT' => 16, 'NS' => 2, 'SOA' => 6];
+    $wireType = $typeMap[$type] ?? 2;
+    $dohUrl = 'https://cloudflare-dns.com/dns-query?name=' . urlencode($domain) . '&type=' . $wireType;
+    $ch = @curl_init($dohUrl);
+    if (!$ch) return [];
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER    => ['Accept: application/dns-json'],
+        CURLOPT_TIMEOUT       => 5,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+    $response = @curl_exec($ch);
+    $httpCode = @curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    @curl_close($ch);
+    if (!$response || $httpCode !== 200) return [];
+
+    $data = @json_decode($response, true);
+    if (!isset($data['Answer'])) return [];
+
+    $phpTypeMap = ['A' => DNS_A, 'AAAA' => DNS_AAAA, 'CNAME' => DNS_CNAME, 'MX' => DNS_MX, 'TXT' => DNS_TXT, 'NS' => DNS_NS, 'SOA' => DNS_SOA];
+    $records = [];
+    foreach ($data['Answer'] as $a) {
+        $rType = $a['type'] ?? 0;
+        $rData = $a['data'] ?? '';
+        $entry = ['host' => $domain, 'type' => $type, 'ttl' => $a['TTL'] ?? 0];
+        if ($type === 'NS') {
+            $entry['target'] = rtrim($rData, '.');
+        } elseif ($type === 'A') {
+            $entry['ip'] = $rData;
+        } elseif ($type === 'AAAA') {
+            $entry['ipv6'] = $rData;
+        } elseif ($type === 'MX') {
+            $parts = explode(' ', $rData, 2);
+            $entry['pri'] = (int)($parts[0] ?? 0);
+            $entry['target'] = rtrim($parts[1] ?? '', '.');
+        } elseif ($type === 'TXT') {
+            $entry['txt'] = trim($rData, '"');
+        } elseif ($type === 'CNAME') {
+            $entry['target'] = rtrim($rData, '.');
+        }
+        $records[] = $entry;
+    }
+    return $records;
 }
 
 function digQuery(string $domain, string $type): ?array
@@ -909,7 +1158,11 @@ function getNameservers(string $domain): array
     $cached = dnsCacheGet($domain, 'NS');
     if ($cached) return $cached;
 
-    $records = dnsQuery($domain, DNS_NS);
+    // Use DNS-over-HTTPS first for fresh results (bypasses local resolver cache)
+    $records = dnsQueryDoh($domain, 'NS');
+    if (empty($records)) {
+        $records = dnsQuery($domain, DNS_NS);
+    }
     $result = [
         'nameservers' => [],
         'count' => 0,
@@ -1527,7 +1780,7 @@ function getRdapUrl(string $tld): ?string
         'org'   => 'https://rdap.publicinterestregistry.org/rdap/domain/',
         'info'  => 'https://rdap.afilias-srs.net/v1/domain/',
         'eu'    => 'https://rdap.europa.eu/v1/domain/',
-        'be'    => 'https://rdap.dnsbelgium.be/domain/',
+        'be'    => 'https://rdap.be/domain/',
         'fr'    => 'https://rdap.nic.fr/domain/',
         'it'    => 'https://rdap.nic.it/domain/',
         'es'    => 'https://rdap.nic.es/domain/',
@@ -1557,6 +1810,7 @@ function getRdapUrl(string $tld): ?string
         'tv'    => 'https://rdap.nic.tv/domain/',
         'cc'    => 'https://rdap.nic.cc/domain/',
         'biz'   => 'https://rdap.nic.biz/domain/',
+        'group' => 'https://rdap.identitydigital.services/rdap/domain/',
     ];
     return $urls[strtolower($tld)] ?? null;
 }
@@ -1719,9 +1973,9 @@ function queryRdap(string $domain): ?array
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT         => 10,
-        CURLOPT_FOLLOWLOCATION  => true,
-        CURLOPT_HTTPHEADER      => ['Accept: application/rdap+json'],
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTPHEADER     => ['Accept: application/rdap+json'],
     ]);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1747,6 +2001,8 @@ function getWhoisServer(string $tld): ?string
         'eu'  => 'whois.eu',
         'uk'  => 'whois.nic.uk',
         'co.uk' => 'whois.nic.uk',
+        'group' => 'whois.nic.group',
+        'be'    => 'whois.dns.be',
     ];
     return $servers[strtolower($tld)] ?? null;
 }
@@ -1765,6 +2021,28 @@ function queryWhoisServer(string $server, string $domain): ?string
     }
     fclose($fp);
     return !empty($raw) ? $raw : null;
+}
+
+function queryWhoisHttp(string $domain): ?string
+{
+    $ch = @curl_init("https://www.whois.com/whois/" . urlencode($domain));
+    if (!$ch) return null;
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; DNSLookupSuite/1.0)',
+    ]);
+    $html = @curl_exec($ch);
+    $code = @curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    @curl_close($ch);
+    if (!$html || $code !== 200) return null;
+
+    if (preg_match('/<pre[^>]*>(.*?)<\/pre>/is', $html, $m)) {
+        $raw = html_entity_decode(trim($m[1]));
+        return !empty($raw) ? $raw : null;
+    }
+    return null;
 }
 
 function parseWhoisRaw(string $raw): array
@@ -1985,35 +2263,86 @@ function whoisLookup(string $domain): array
 
     $tld = getWhoisTld($domain);
 
-    // 1) Try RDAP first (HTTP-based, works from any user including apache)
-    $rdapResult = queryRdap($domain);
-    if ($rdapResult && ($rdapResult['registrar'] || $rdapResult['creation_date'] || $rdapResult['name_servers'])) {
-        $result = array_merge($emptyResult, $rdapResult);
+    // Fire RDAP + HTTP WHOIS in parallel — whichever returns first wins
+    $rdapUrl = getRdapUrl($tld);
+    $rdapHandle = null;
+    $httpHandle = null;
+    $mh = curl_multi_init();
+
+    if ($rdapUrl) {
+        $rdapHandle = curl_init($rdapUrl . $domain);
+        curl_setopt_array($rdapHandle, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER     => ['Accept: application/rdap+json'],
+        ]);
+        curl_multi_add_handle($mh, $rdapHandle);
+    }
+
+    $httpHandle = curl_init("https://www.whois.com/whois/" . urlencode($domain));
+    curl_setopt_array($httpHandle, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; DNSLookupSuite/1.0)',
+    ]);
+    curl_multi_add_handle($mh, $httpHandle);
+
+    // Run both until one finishes, max 5s total
+    do {
+        $status = curl_multi_exec($mh, $active);
+        if ($active) curl_multi_select($mh, 1);
+    } while ($active && $status === CURLM_OK);
+
+    // Check RDAP first
+    $rdapParsed = null;
+    if ($rdapHandle) {
+        $rdapCode = curl_getinfo($rdapHandle, CURLINFO_HTTP_CODE);
+        $rdapBody = curl_multi_getcontent($rdapHandle);
+        if ($rdapCode === 200 && !empty($rdapBody)) {
+            $data = json_decode($rdapBody, true);
+            if ($data && isset($data['ldhName'])) {
+                $rdapParsed = parseRdapResponse($data);
+            }
+        }
+        curl_multi_remove_handle($mh, $rdapHandle);
+        curl_close($rdapHandle);
+    }
+
+    if ($rdapParsed && ($rdapParsed['registrar'] || $rdapParsed['creation_date'] || $rdapParsed['name_servers'])) {
+        $result = array_merge($emptyResult, $rdapParsed);
         $result['whois_server'] = 'rdap.' . $tld;
         $result['raw'] = null;
+        curl_multi_close($mh);
         dnsCacheSet($domain, 'WHOIS', $result);
         return $result;
     }
 
-    // 2) Fallback to traditional WHOIS (port 43) — may fail if port 43 is blocked
+    // RDAP failed — use HTTP WHOIS result (already fetched in parallel)
     $raw = null;
-    $tldServer = getWhoisServer($tld);
-    if ($tldServer) {
-        $emptyResult['whois_server'] = $tldServer;
-        $raw = queryWhoisServer($tldServer, $domain);
-    }
-
-    // 3) Fallback to system whois command
-    if (!$raw) {
-        $whoisPath = trim(shell_exec('which whois 2>/dev/null') ?? '');
-        if ($whoisPath) {
-            $raw = @shell_exec("$whoisPath $domain 2>/dev/null");
+    if ($httpHandle) {
+        $httpCode = curl_getinfo($httpHandle, CURLINFO_HTTP_CODE);
+        $html = curl_multi_getcontent($httpHandle);
+        if ($httpCode === 200 && !empty($html)) {
+            if (preg_match('/<pre[^>]*>(.*?)<\/pre>/is', $html, $m)) {
+                $raw = html_entity_decode(trim($m[1]));
+            }
         }
+        curl_multi_remove_handle($mh, $httpHandle);
+        curl_close($httpHandle);
     }
+    curl_multi_close($mh);
 
-    // 4) Final fallback to whois.iana.org
-    if (!$raw) {
-        $raw = queryWhoisServer('whois.iana.org', $domain);
+    if ($raw) $emptyResult['whois_server'] = 'whois.com (HTTP)';
+
+    // Last resort: try system whois or port 43
+    if (!$raw && function_exists('shell_exec')) {
+        $tldServer = getWhoisServer($tld);
+        if ($tldServer) {
+            $emptyResult['whois_server'] = $tldServer;
+            $raw = queryWhoisServer($tldServer, $domain);
+        }
     }
 
     if (!empty($raw)) {
