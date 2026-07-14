@@ -12,7 +12,7 @@ No build tools, no Node.js, no framework dependencies. Just upload and go.
 - **Email Anonymizer** — Instantly mask email addresses (preserves first character and TLD).
 - **Password Generator** — Generate strong random passwords with customizable length and character sets.
 - **DNS Lookup Suite** — Comprehensive DNS analysis: A, AAAA, CNAME, MX, TXT, CAA, SRV, SOA records, SPF/DKIM/DMARC validation, nameserver checks, delegation analysis, reverse DNS (PTR), subdomain discovery, DNSSEC status, EDNS support, and a dig-like query tool.
-- **SSL/TLS Toolkit** — Certificate checker, chain validator, TLS version tester, HSTS checker, and combined security audit.
+- **SSL/TLS** — Certificate checker, chain validator, TLS version tester, HSTS checker, and combined security audit.
 - **IP Reputation Checker** — Aggregate data from ip-api.com (ASN/GeoIP), Spamhaus DNSBL, TOR exit node detection, AbuseIPDB, and VirusTotal. Computes a risk score and reputation rating.
 - **Dashboard** — Quick overview of all tools with stats.
 - **Dark/Light theme** — Persistent toggle.
@@ -108,7 +108,7 @@ Then open `http://localhost:8080/`.
 │   ├── snippets.php            # Snippet CRUD
 │   ├── search.php              # Global search
 │   ├── dns.php                 # DNS Lookup Suite
-│   ├── ssl.php                 # SSL/TLS Toolkit
+│   ├── ssl.php                 # SSL/TLS
 │   └── ip-reputation.php       # IP Reputation Checker
 ├── assets/
 │   ├── css/style.css           # Complete stylesheet
@@ -159,7 +159,7 @@ Full DNS analysis for any domain. Results are cached in the database for 30 minu
 - **EDNS** — Support detection
 - **Dig tool** — Query any record type against any nameserver
 
-### SSL/TLS Toolkit
+### SSL/TLS
 
 - **Certificate check** — Expiry, subject/issuer info, SANs, self-signed detection, signature algorithm
 - **Chain validator** — Full certificate chain analysis, issuer matching, CA verification
