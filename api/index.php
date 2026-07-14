@@ -57,6 +57,9 @@ try {
         case 'dns':
             require __DIR__ . '/dns.php';
             break;
+        case 'ssl':
+            require __DIR__ . '/ssl.php';
+            break;
         default:
             Response::notFound('API endpoint not found');
     }
