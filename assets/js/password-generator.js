@@ -313,145 +313,85 @@ function renderPasswordGenerator() {
 
     body.innerHTML = `
         <div class="pg-wrap">
-            <div class="pg-card">
-                <div class="pg-display-area">
-                    <div class="pg-display-box" id="pgDisplayBox" title="Click to select">
-                        <span class="pg-display font-mono" id="pgDisplay">Click generate to start</span>
-                    </div>
-                    <div class="pg-display-actions">
-                        <button class="pg-action-btn" id="pgShowBtn" title="Show/Hide password" aria-label="Toggle password visibility">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="pg-action-btn pg-action-primary" id="pgCopyBtn" title="Copy to clipboard" aria-label="Copy password">
-                            <i class="fas fa-copy"></i>
-                        </button>
-                        <button class="pg-action-btn" id="pgRegenBtn" title="Regenerate" aria-label="Generate new password">
-                            <i class="fas fa-rotate"></i>
-                        </button>
+            <div class="pg-hero">
+                <div class="pg-display-box" id="pgDisplayBox" title="Click to select">
+                    <span class="pg-display font-mono" id="pgDisplay">Click generate to start</span>
+                </div>
+                <div class="pg-strength-track"><div class="pg-strength-bar" id="pgStrengthBar"></div></div>
+                <div class="pg-strength-info">
+                    <span class="pg-strength-label" id="pgStrengthLabel">&mdash;</span>
+                    <span class="pg-entropy" id="pgEntropy">0 bits of entropy</span>
+                </div>
+                <div class="pg-hero-actions">
+                    <button class="pg-hero-btn" id="pgShowBtn" title="Show/Hide"><i class="fas fa-eye"></i></button>
+                    <button class="pg-hero-btn pg-hero-primary" id="pgCopyBtn" title="Copy"><i class="fas fa-copy"></i></button>
+                    <button class="pg-hero-btn pg-hero-generate" id="pgRegenBtn" title="Regenerate"><i class="fas fa-rotate"></i></button>
+                </div>
+            </div>
+
+            <div class="pg-opts">
+                <div class="pg-length-row">
+                    <label class="pg-label" for="pgLength">Length</label>
+                    <div class="pg-length-controls">
+                        <button class="pg-length-btn" id="pgLengthDown"><i class="fas fa-minus"></i></button>
+                        <input type="range" id="pgLength" class="pg-slider" min="4" max="128" value="24">
+                        <button class="pg-length-btn" id="pgLengthUp"><i class="fas fa-plus"></i></button>
+                        <span class="pg-length-val font-mono" id="pgLengthVal">24</span>
                     </div>
                 </div>
 
-                <div class="pg-strength-area">
-                    <div class="pg-strength-track"><div class="pg-strength-bar" id="pgStrengthBar"></div></div>
-                    <div class="pg-strength-info">
-                        <span class="pg-strength-label" id="pgStrengthLabel">—</span>
-                        <span class="pg-entropy" id="pgEntropy">0 bits of entropy</span>
-                    </div>
+                <div class="pg-chars">
+                    <label class="pg-char-pill"><input type="checkbox" id="pgUpper" checked><span>A-Z</span></label>
+                    <label class="pg-char-pill"><input type="checkbox" id="pgLower" checked><span>a-z</span></label>
+                    <label class="pg-char-pill"><input type="checkbox" id="pgNumbers" checked><span>0-9</span></label>
+                    <label class="pg-char-pill"><input type="checkbox" id="pgSymbols" checked><span>!@#</span></label>
                 </div>
 
-                <div class="pg-section">
-                    <div class="pg-length-row">
-                        <label class="pg-label" for="pgLength">Password Length</label>
-                        <div class="pg-length-controls">
-                            <button class="pg-length-btn" id="pgLengthDown" aria-label="Decrease length"><i class="fas fa-minus"></i></button>
-                            <input type="range" id="pgLength" class="pg-slider" min="4" max="128" value="24" aria-label="Password length">
-                            <button class="pg-length-btn" id="pgLengthUp" aria-label="Increase length"><i class="fas fa-plus"></i></button>
-                            <span class="pg-length-val font-mono" id="pgLengthVal">24</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pg-section">
-                    <div class="pg-section-title">Character Types</div>
-                    <div class="pg-toggles">
-                        <label class="pg-toggle-row">
-                            <span class="pg-toggle-label"><i class="fas fa-font"></i> Uppercase (A-Z)</span>
-                            <input type="checkbox" id="pgUpper" class="pg-toggle" checked aria-label="Include uppercase letters">
-                        </label>
-                        <label class="pg-toggle-row">
-                            <span class="pg-toggle-label"><i class="fas fa-font"></i> Lowercase (a-z)</span>
-                            <input type="checkbox" id="pgLower" class="pg-toggle" checked aria-label="Include lowercase letters">
-                        </label>
-                        <label class="pg-toggle-row">
-                            <span class="pg-toggle-label"><i class="fas fa-hashtag"></i> Numbers (0-9)</span>
-                            <input type="checkbox" id="pgNumbers" class="pg-toggle" checked aria-label="Include numbers">
-                        </label>
-                        <label class="pg-toggle-row">
-                            <span class="pg-toggle-label"><i class="fas fa-asterisk"></i> Symbols (!@#$%)</span>
-                            <input type="checkbox" id="pgSymbols" class="pg-toggle" checked aria-label="Include symbols">
-                        </label>
-                    </div>
-                </div>
-
-                <div class="pg-section">
-                    <div class="pg-section-title">Exclusions</div>
-                    <div class="pg-toggles">
-                        <label class="pg-toggle-row">
-                            <span class="pg-toggle-label"><i class="fas fa-eye-slash"></i> Similar characters (i, l, 1, L, o, 0, O)</span>
-                            <input type="checkbox" id="pgExcludeSimilar" class="pg-toggle" aria-label="Exclude similar characters">
-                        </label>
-                        <label class="pg-toggle-row">
-                            <span class="pg-toggle-label"><i class="fas fa-ban"></i> Ambiguous characters (I, l, 1, O, o, 0)</span>
-                            <input type="checkbox" id="pgExcludeAmbiguous" class="pg-toggle" aria-label="Exclude ambiguous characters">
-                        </label>
-                        <label class="pg-toggle-row">
-                            <span class="pg-toggle-label"><i class="fas fa-xmark"></i> Exclude custom characters</span>
-                            <input type="checkbox" id="pgExcludeCustomToggle" class="pg-toggle" aria-label="Enable custom character exclusion">
-                        </label>
-                    </div>
-                    <input type="text" id="pgExcludeCustom" class="pg-input pg-custom-exclude" placeholder="Enter characters to exclude..." style="display:none" aria-label="Custom characters to exclude">
-                </div>
-
-                <div class="pg-section">
-                    <button class="pg-section-toggle" id="pgAdvancedToggle" aria-expanded="false">
-                        <i class="fas fa-sliders"></i> Advanced Options
-                        <i class="fas fa-chevron-down pg-chevron"></i>
-                    </button>
+                <div class="pg-extras">
+                    <button class="pg-extras-toggle" id="pgAdvancedToggle"><i class="fas fa-sliders"></i> Options <i class="fas fa-chevron-down pg-chevron"></i></button>
                     <div class="pg-advanced" id="pgAdvancedPanel" style="display:none">
                         <div class="pg-toggles">
-                            <label class="pg-toggle-row">
-                                <span class="pg-toggle-label" title="Ensure at least N numbers in the password">Min. numbers</span>
-                                <input type="number" id="pgMinNums" class="pg-mini-input" min="0" max="128" value="0" aria-label="Minimum numbers">
-                            </label>
-                            <label class="pg-toggle-row">
-                                <span class="pg-toggle-label" title="Ensure at least N symbols in the password">Min. symbols</span>
-                                <input type="number" id="pgMinSyms" class="pg-mini-input" min="0" max="128" value="0" aria-label="Minimum symbols">
-                            </label>
-                            <label class="pg-toggle-row">
-                                <span class="pg-toggle-label" title="No two identical characters side by side">Avoid repeated characters</span>
-                                <input type="checkbox" id="pgAvoidRepeated" class="pg-toggle" aria-label="Avoid repeated characters">
-                            </label>
-                            <label class="pg-toggle-row">
-                                <span class="pg-toggle-label" title="First character is always a letter">Start with a letter</span>
-                                <input type="checkbox" id="pgStartLetter" class="pg-toggle" aria-label="Start with a letter">
-                            </label>
+                            <label class="pg-toggle-row"><span class="pg-toggle-label"><i class="fas fa-eye-slash"></i> Exclude similar (i,l,1,L,o,0,O)</span><input type="checkbox" id="pgExcludeSimilar" class="pg-toggle"></label>
+                            <label class="pg-toggle-row"><span class="pg-toggle-label"><i class="fas fa-ban"></i> Exclude ambiguous (I,l,1,O,o,0)</span><input type="checkbox" id="pgExcludeAmbiguous" class="pg-toggle"></label>
+                            <label class="pg-toggle-row"><span class="pg-toggle-label"><i class="fas fa-xmark"></i> Custom exclude</span><input type="checkbox" id="pgExcludeCustomToggle" class="pg-toggle"></label>
+                            <input type="text" id="pgExcludeCustom" class="pg-input pg-custom-exclude" placeholder="Characters to exclude..." style="display:none">
+                            <label class="pg-toggle-row"><span class="pg-toggle-label">Min. numbers</span><input type="number" id="pgMinNums" class="pg-mini-input" min="0" max="128" value="0"></label>
+                            <label class="pg-toggle-row"><span class="pg-toggle-label">Min. symbols</span><input type="number" id="pgMinSyms" class="pg-mini-input" min="0" max="128" value="0"></label>
+                            <label class="pg-toggle-row"><span class="pg-toggle-label"><i class="fas fa-font"></i> No repeated chars</span><input type="checkbox" id="pgAvoidRepeated" class="pg-toggle"></label>
+                            <label class="pg-toggle-row"><span class="pg-toggle-label"><i class="fas fa-arrow-right"></i> Start with letter</span><input type="checkbox" id="pgStartLetter" class="pg-toggle"></label>
                         </div>
                     </div>
                 </div>
 
-                <button class="pg-generate-btn" id="pgGenerateBtn" aria-label="Generate new password">
-                    <i class="fas fa-wand-magic-sparkles"></i> Generate Password
-                </button>
-
-                <div class="pg-actions-row">
+                <div class="pg-bottom-row">
+                    <button class="pg-secondary-btn" id="pgMultiToggle"><i class="fas fa-layer-group"></i> Multi</button>
+                    <button class="pg-secondary-btn" id="pgHistoryToggle"><i class="fas fa-clock-rotate-left"></i> History</button>
                     <button class="pg-secondary-btn" id="pgDownloadTxt"><i class="fas fa-download"></i> TXT</button>
                     <button class="pg-secondary-btn" id="pgDownloadCsv"><i class="fas fa-file-csv"></i> CSV</button>
-                    <button class="pg-secondary-btn" id="pgMultiToggle"><i class="fas fa-layer-group"></i> Generate Multiple</button>
-                    <button class="pg-secondary-btn" id="pgHistoryToggle"><i class="fas fa-clock-rotate-left"></i> History</button>
                 </div>
+            </div>
 
-                <div class="pg-extra-panel" id="pgMultiPanel" style="display:none">
-                    <div class="pg-multi-header">
-                        <span class="pg-section-title">Multiple Passwords</span>
-                        <div class="pg-multi-count-row">
-                            <label class="pg-label" style="margin:0">Count:</label>
-                            <input type="number" id="pgMultiCount" class="pg-mini-input" min="5" max="20" value="10" aria-label="Number of passwords">
-                            <button class="pg-mini-btn" id="pgMultiGenerate"><i class="fas fa-wand-magic-sparkles"></i> Generate</button>
-                        </div>
-                    </div>
-                    <div class="pg-history-list" id="pgMultiList">
-                        <div class="pg-history-empty">Click "Generate" to create multiple passwords</div>
+            <div class="pg-extra-panel" id="pgMultiPanel" style="display:none">
+                <div class="pg-multi-header">
+                    <span class="pg-section-title">Multiple Passwords</span>
+                    <div class="pg-multi-count-row">
+                        <label class="pg-label" style="margin:0">Count:</label>
+                        <input type="number" id="pgMultiCount" class="pg-mini-input" min="5" max="20" value="10">
+                        <button class="pg-mini-btn" id="pgMultiGenerate"><i class="fas fa-wand-magic-sparkles"></i> Generate</button>
                     </div>
                 </div>
+                <div class="pg-history-list" id="pgMultiList">
+                    <div class="pg-history-empty">Click "Generate" to create multiple passwords</div>
+                </div>
+            </div>
 
-                <div class="pg-extra-panel" id="pgHistoryPanel" style="display:none">
-                    <div class="pg-history-header">
-                        <span class="pg-section-title">Password History <span class="pg-muted">(this session only)</span></span>
-                        <button class="pg-mini-btn pg-danger-btn" id="pgClearHistory"><i class="fas fa-trash"></i> Clear</button>
-                    </div>
-                    <div class="pg-history-list" id="pgHistoryList">
-                        <div class="pg-history-empty">No passwords generated yet</div>
-                    </div>
+            <div class="pg-extra-panel" id="pgHistoryPanel" style="display:none">
+                <div class="pg-history-header">
+                    <span class="pg-section-title">History <span class="pg-muted">(this session)</span></span>
+                    <button class="pg-mini-btn pg-danger-btn" id="pgClearHistory"><i class="fas fa-trash"></i> Clear</button>
+                </div>
+                <div class="pg-history-list" id="pgHistoryList">
+                    <div class="pg-history-empty">No passwords generated yet</div>
                 </div>
             </div>
         </div>
@@ -464,7 +404,6 @@ function renderPasswordGenerator() {
 function pgAttachEvents() {
     const $ = id => document.getElementById(id);
 
-    $('pgGenerateBtn').addEventListener('click', pgGenerateNew);
     $('pgCopyBtn').addEventListener('click', pgCopyPassword);
     $('pgShowBtn').addEventListener('click', pgToggleShow);
     $('pgRegenBtn').addEventListener('click', pgGenerateNew);

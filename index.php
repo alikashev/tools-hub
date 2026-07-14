@@ -19,7 +19,7 @@ $appName = APP_NAME;
     <title><?= $appName ?></title>
     <link rel="icon" type="image/png" href="ficksie_logo_nt.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/style.css?v=66">
+    <link rel="stylesheet" href="assets/css/style.css?v=67">
 </head>
 <body>
     <div id="app">
@@ -288,7 +288,8 @@ $appName = APP_NAME;
     <!-- Toast container -->
     <div class="toast-container" id="toastContainer"></div>
 <script src="assets/js/dns.js?v=23"></script>
-<script src="assets/js/password-generator.js?v=20"></script>
+<script src="assets/js/password-generator.js?v=21"></script>
+<script src="assets/js/ssl-tools.js?v=8"></script>
 
     <script src="assets/js/app.js?v=44"></script>
 </body>

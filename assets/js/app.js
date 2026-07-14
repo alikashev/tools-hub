@@ -227,6 +227,7 @@ const viewMeta = {
     'ip-reputation':      { title: 'IP Reputation',      subtitle: 'Analyze IP addresses for security', icon: 'fa-shield-halved' },
     'dns-lookup':         { title: 'DNS Lookup',         subtitle: 'Query DNS records',               icon: 'fa-globe' },
     'password-generator': { title: 'Password Generator', subtitle: 'Create secure passwords',         icon: 'fa-key' },
+    'ssl-toolkit':        { title: 'SSL/TLS Toolkit',    subtitle: 'Certificates, chains, TLS & HSTS', icon: 'fa-shield-halved' },
     'users':              { title: 'Manage Users',       subtitle: 'Create and manage user accounts', icon: 'fa-users' },
 };
 
@@ -278,6 +279,7 @@ function dispatchRender(view) {
     else if (view === 'ip-reputation')      renderIpReputation();
     else if (view === 'dns-lookup')         renderDnsLookup();
     else if (view === 'password-generator') renderPasswordGenerator();
+    else if (view === 'ssl-toolkit')        renderSslToolkit();
     else if (view === 'users')              renderUserManagement();
 }
 
@@ -477,6 +479,7 @@ function initToolWheel() {
         { view: 'ip-reputation', icon: 'fa-shield-halved', label: 'IP Rep', color: '#f87171' },
         { view: 'dns-lookup', icon: 'fa-globe', label: 'DNS Lookup', color: '#38bdf8' },
         { view: 'password-generator', icon: 'fa-key', label: 'Pass Gen', color: '#c084fc' },
+        { view: 'ssl-toolkit', icon: 'fa-shield-halved', label: 'SSL/TLS', color: '#34d399' },
     ];
     if (isAdmin()) twState.tools.push({ view: 'users', icon: 'fa-users', label: 'Users', color: '#fb923c' });
     twState.segAngle = 360 / twState.tools.length;
@@ -925,6 +928,13 @@ async function renderDashboard() {
                 name: 'Password Generator',
                 desc: 'Create secure, custom passwords with advanced options',
                 color: '#8b5cf6',
+            },
+            {
+                key: 'ssl-toolkit',
+                icon: 'fa-shield-halved',
+                name: 'SSL/TLS Toolkit',
+                desc: 'Check certificates, chains, TLS versions & HSTS',
+                color: '#34d399',
             },
         ];
 
