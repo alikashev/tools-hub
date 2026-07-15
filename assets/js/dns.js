@@ -9,22 +9,6 @@ async function renderDnsLookup() {
     const favorites = JSON.parse(localStorage.getItem('dns-favorites') || '[]');
     body.innerHTML = `
         <div class="dns-wrap">
-            <div class="dns-header">
-                <div class="dns-header-left">
-                    <div class="dns-header-icon"><i class="fas fa-globe"></i></div>
-                    <div class="dns-header-text">
-                        <h2>DNS Lookup Suite</h2>
-                        <p>Full domain &amp; IP health analysis — records, security, RIPE data &amp; propagation</p>
-                    </div>
-                </div>
-                <div class="dns-header-right">
-                    <label class="dns-auto-label">
-                        <input type="checkbox" id="dnsAutoRefresh" ${localStorage.getItem('dns-auto-refresh') === 'true' ? 'checked' : ''}>
-                        <span>Auto 60s</span>
-                    </label>
-                    <button class="dns-clear-btn" id="dnsClearBtn" title="Clear"><i class="fas fa-eraser"></i></button>
-                </div>
-            </div>
             <div class="dns-search-row">
                 <div class="dns-search-box">
                     <i class="fas fa-search dns-search-icon"></i>
@@ -39,22 +23,15 @@ async function renderDnsLookup() {
                     </div>
                     <button class="dns-search-btn" id="dnsAnalyzeBtn"><i class="fas fa-globe"></i> Check</button>
                 </div>
-            </div>
-            ${searchHistory.length > 0 ? `
-            <div class="dns-history-wrap">
-                <button class="dns-history-toggle" id="dnsHistoryToggle"><i class="fas fa-clock-rotate"></i> Recent <i class="fas fa-chevron-down dns-history-chevron"></i></button>
-                <div class="dns-history-bar" id="dnsHistoryBar" style="display:none">
-                    ${searchHistory.slice(0, 8).map(entry => {
-                        const isFav = favorites.includes(entry.domain);
-                        return `<span class="dns-chip" data-domain="${entry.domain}">
-                            <span class="dns-chip-dot" style="background:${entry.health >= 80 ? '#22c55e' : entry.health >= 50 ? '#f59e0b' : '#ef4444'}"></span>
-                            ${entry.domain}
-                            <i class="fas fa-star dns-fav-star ${isFav ? 'fav' : ''}" data-domain="${entry.domain}"></i>
-                        </span>`;
-                    }).join('')}
-                    <button class="dns-history-clear" id="dnsHistoryClear" title="Clear history">&times;</button>
+                <div class="dns-actions">
+                    <label class="dns-auto-label" title="Auto refresh every 60s">
+                        <input type="checkbox" id="dnsAutoRefresh" ${localStorage.getItem('dns-auto-refresh') === 'true' ? 'checked' : ''}>
+                        <span>Auto 60s</span>
+                    </label>
+                    <button class="dns-action-btn" id="dnsClearBtn" title="Clear"><i class="fas fa-eraser"></i></button>
+                    <div class="dns-recent-bar" id="dnsRecentBar"></div>
                 </div>
-            </div>` : ''}
+            </div>
             <div id="dnsResult">
                 <div class="dns-empty-state">
                     <i class="fas fa-globe"></i>
@@ -94,17 +71,10 @@ function updateModeLabel() {
             let data;
             if (isIp) {
                 data = await api('GET', `dns?ip_scan=1&ip=${encodeURIComponent(domain)}`);
+            } else if (quickMode) {
+                data = await api('GET', `dns?domain=${encodeURIComponent(domain)}&quick=1`);
             } else {
-                // Check availability first
-                const avail = await api('GET', `dns?check_domain=${encodeURIComponent(domain)}`);
-                if (avail.available) {
-                    lastData = avail;
-                    resultDiv.innerHTML = renderAvailableResult(avail);
-                    attachAvailableEvents(avail);
-                    analyzeBtn.disabled = false; analyzeBtn.innerHTML = '<i class="fas fa-globe"></i> Check';
-                    return;
-                }
-                data = await api('GET', `dns?domain=${encodeURIComponent(domain)}${quickMode ? '&quick=1' : ''}`);
+                data = await api('GET', `dns?domain=${encodeURIComponent(domain)}`);
             }
             lastData = data;
             if (data.is_ip) {
@@ -119,6 +89,7 @@ function updateModeLabel() {
                 if (idx >= 0) hist[idx] = entry; else hist.unshift(entry);
                 if (hist.length > 50) hist.length = 50;
                 localStorage.setItem('dns-history', JSON.stringify(hist));
+                renderRecentBar();
                 attachDnsEvents(data);
                 if (quickMode) applyQuickScan();
             } else {
@@ -157,25 +128,72 @@ function updateModeLabel() {
         input.focus(); if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
     });
     document.getElementById('dnsAutoRefresh')?.addEventListener('change', function() { localStorage.setItem('dns-auto-refresh', this.checked); });
-    document.querySelectorAll('.dns-chip').forEach(chip => {
-        chip.addEventListener('click', e => { if (e.target.closest('.dns-fav-star')) return; input.value = chip.dataset.domain; analyze(input.value, isQuickMode()); });
-    });
-    document.querySelectorAll('.dns-fav-star').forEach(star => {
-        star.addEventListener('click', function(e) { e.stopPropagation(); toggleFav(this.dataset.domain); this.classList.toggle('fav'); });
-    });
-    document.getElementById('dnsHistoryToggle')?.addEventListener('click', function() {
-        const bar = document.getElementById('dnsHistoryBar');
-        const chevron = this.querySelector('.dns-history-chevron');
+
+    function renderRecentBar() {
+        const bar = document.getElementById('dnsRecentBar');
         if (!bar) return;
-        const open = bar.style.display !== 'none';
-        bar.style.display = open ? 'none' : '';
-        if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
-    });
-    document.getElementById('dnsHistoryClear')?.addEventListener('click', () => {
-        localStorage.removeItem('dns-history');
-        document.querySelector('.dns-history-wrap')?.remove();
-        toast('History cleared.', 'info');
-    });
+        const hist = JSON.parse(localStorage.getItem('dns-history') || '[]');
+        if (!hist.length) { bar.innerHTML = ''; return; }
+        const favs = JSON.parse(localStorage.getItem('dns-favorites') || '[]');
+        bar.innerHTML = `
+            <button class="dns-recent-btn" id="dnsRecentBtn" title="Recent searches"><i class="fas fa-clock-rotate-left"></i></button>
+            <div class="dns-recent-dropdown" id="dnsRecentDropdown" style="display:none">
+                <div class="dns-recent-head">
+                    <span class="dns-recent-title"><i class="fas fa-clock-rotate-left"></i> Recent</span>
+                    <button class="dns-recent-clear" id="dnsHistoryClear" title="Clear all">Clear</button>
+                </div>
+                <div class="dns-recent-list">
+                    ${hist.slice(0, 10).map(entry => {
+                        const isFav = favs.includes(entry.domain);
+                        const diff = Date.now() - new Date(entry.time).getTime();
+                        const mins = Math.floor(diff / 60000);
+                        const hrs = Math.floor(diff / 3600000);
+                        const days = Math.floor(diff / 86400000);
+                        const ago = mins < 1 ? 'now' : mins < 60 ? mins + 'm' : hrs < 24 ? hrs + 'h' : days + 'd';
+                        return `<div class="dns-recent-item" data-domain="${entry.domain}">
+                            <span class="dns-recent-dot" style="background:${entry.health >= 80 ? '#22c55e' : entry.health >= 50 ? '#f59e0b' : '#ef4444'}"></span>
+                            <span class="dns-recent-domain">${entry.domain}</span>
+                            <span class="dns-recent-time">${ago}</span>
+                            <i class="fas fa-star dns-recent-fav ${isFav ? 'fav' : ''}" data-domain="${entry.domain}"></i>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        const btn = document.getElementById('dnsRecentBtn');
+        const dd = document.getElementById('dnsRecentDropdown');
+        if (btn && dd) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const open = dd.style.display !== 'none';
+                dd.style.display = open ? 'none' : '';
+                this.classList.toggle('dns-recent-btn-active', !open);
+            });
+            dd.querySelectorAll('.dns-recent-item').forEach(item => {
+                item.addEventListener('click', e => {
+                    if (e.target.closest('.dns-recent-fav')) return;
+                    input.value = item.dataset.domain;
+                    dd.style.display = 'none';
+                    btn.classList.remove('dns-recent-btn-active');
+                    analyze(input.value, isQuickMode());
+                });
+            });
+            dd.querySelectorAll('.dns-recent-fav').forEach(star => {
+                star.addEventListener('click', function(e) { e.stopPropagation(); toggleFav(this.dataset.domain); this.classList.toggle('fav'); });
+            });
+            document.getElementById('dnsHistoryClear')?.addEventListener('click', () => {
+                localStorage.removeItem('dns-history');
+                bar.innerHTML = '';
+                toast('History cleared.', 'info');
+            });
+            document.addEventListener('click', function(e) {
+                if (!dd.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                    dd.style.display = 'none';
+                    btn.classList.remove('dns-recent-btn-active');
+                }
+            });
+        }
+    }
+    renderRecentBar();
 }
 
 function toggleFav(domain) {
@@ -250,6 +268,9 @@ function renderIpScanResult(data) {
                     ${tag('RIPE ' + (r.status === 'ok' ? 'Found' : 'N/A'), r.status === 'ok')}
                     ${r.abuse_email ? tag('Abuse Set', true) : ''}
                 </div>
+                <div class="dns-banner-qa">
+                    ${qa(`https://stat.ripe.net/${data.ip}`, 'fa-database', 'RIPE Stat')}
+                </div>
             </div>
         </div>
         <div class="dns-banner-score">
@@ -266,18 +287,6 @@ function renderIpScanResult(data) {
         <div class="dns-section">
             <div class="dns-section-title"><i class="fas fa-database"></i> RIPE Database</div>
             <div class="dns-section-body">${ripeBody}</div>
-        </div>
-        <div class="dns-section">
-            <div class="dns-section-title"><i class="fas fa-bolt"></i> Quick Actions</div>
-            <div class="dns-section-body">
-                <div class="dns-qa-grid">
-                    ${qa(`https://www.google.com/search?q=${data.ip}`, 'fa-google', 'Search')}
-                    ${qa(`https://stat.ripe.net/${data.ip}`, 'fa-database', 'RIPE Stat')}
-                    ${qa(`https://rdap.ripe.net/ip/${data.ip}`, 'fa-server', 'RIPE RDAP')}
-                    ${qa(`https://whois.domaintools.com/${data.ip}`, 'fa-circle-info', 'WHOIS')}
-                    ${qa(`https://talosintelligence.com/reputation_center/lookup?search=${data.ip}`, 'fa-shield', 'Reputation')}
-                </div>
-            </div>
         </div>
         <div class="dns-section">
             <div class="dns-section-title"><i class="fas fa-download"></i> Export</div>
@@ -506,6 +515,13 @@ function renderDnsResult(data) {
                     ${ageBadge}${expiryBadge}
                     <span class="dns-tag dns-tag-w"><i class="fas fa-clock"></i> ${data.duration_ms || '?'}ms</span>
                 </div>
+                <div class="dns-banner-qa">
+                    ${qa(`https://${data.domain}`, 'fa-globe', 'Visit Website')}
+                    ${qa(`https://web.archive.org/web/*/${data.domain}`, 'fa-clock-rotate-left', 'Archive')}
+                    ${qa(`https://securitytrails.com/domain/${data.domain}/dns`, 'fa-clock-rotate-left', 'SecurityTrails')}
+                    ${qa(`https://www.whatsmydns.net/#A/${data.domain}`, 'fa-globe', 'Propagation')}
+                    ${qa(`https://dnssec-debugger.verisignlabs.com/${data.domain}`, 'fa-shield-halved', 'DNSSEC')}
+                </div>
             </div>
         </div>
         <div class="dns-banner-score">
@@ -561,25 +577,6 @@ function renderDnsResult(data) {
         <div class="dns-section">
             <div class="dns-section-title"><i class="fas fa-network-wired"></i> Protocols</div>
             <div class="dns-section-body">${renderProtocolsBody(data)}</div>
-        </div>
-        <div class="dns-section">
-            <div class="dns-section-title"><i class="fas fa-bolt"></i> Quick Actions</div>
-            <div class="dns-section-body">
-                <div class="dns-qa-grid">
-                    ${qa(`https://www.google.com/search?q=site:${data.domain}`, 'fa-google', 'Search')}
-                    ${qa(`https://whois.domaintools.com/${data.domain}`, 'fa-circle-info', 'WHOIS')}
-                    ${qa(`https://dns.google/resolve?name=${data.domain}`, 'fa-arrows-spin', 'DNS')}
-                    ${qa(`https://www.ssllabs.com/ssltest/analyze.html?d=${data.domain}`, 'fa-lock', 'SSL')}
-                    ${qa(`https://securityheaders.com/?q=${data.domain}`, 'fa-shield', 'Headers')}
-                    ${qa(`https://downforeveryoneorjustme.com/${data.domain}`, 'fa-heart-pulse', 'Down?')}
-                    ${qa(`https://toolbox.googleapps.com/apps/dig/#A/${data.domain}`, 'fa-terminal', 'Dig')}
-                    ${qa(`https://web.archive.org/web/*/${data.domain}`, 'fa-clock-rotate-left', 'Archive')}
-                </div>
-                <div style="margin-top:12px">
-                    <button class="btn btn-sm btn-primary" id="dnsCheckAvail"><i class="fas fa-cart-shopping"></i> Check if Available to Register</button>
-                    <div id="dnsAvailResult" style="margin-top:10px"></div>
-                </div>
-            </div>
         </div>
         <div class="dns-section">
             <div class="dns-section-title"><i class="fas fa-terminal"></i> Dig Tool</div>
@@ -1000,37 +997,4 @@ function attachDnsEvents(data) {
         digNs.addEventListener('keydown', e => { if (e.key === 'Enter') doDig(); });
     }
 
-    // Domain availability check
-    document.getElementById('dnsCheckAvail')?.addEventListener('click', async function() {
-        const btn = this;
-        const out = document.getElementById('dnsAvailResult');
-        if (!out) return;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
-        out.innerHTML = '';
-        try {
-            const r = await fetch(`api/dns?check_domain=${encodeURIComponent(data.domain)}`);
-            const j = await r.json();
-            const d = j.data;
-            if (!d) { out.innerHTML = warn(j.error || 'Check failed'); return; }
-            if (d.available) {
-                out.innerHTML = `<div class="dns-rec-line" style="border-left:3px solid #22c55e;padding:10px 12px;border-radius:6px;background:rgba(34,197,94,0.08)">
-                    <span class="dns-rec-type" style="background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)"><i class="fas fa-check"></i> Available</span>
-                    <span class="dns-rec-val font-mono" style="color:#22c55e;font-weight:600">${escHtml(d.domain)}</span>
-                    <span class="dns-rec-ttl" style="color:#86efac">${escHtml(d.details)}</span>
-                </div>`;
-            } else {
-                out.innerHTML = `<div class="dns-rec-line" style="border-left:3px solid #ef4444;padding:10px 12px;border-radius:6px;background:rgba(239,68,68,0.08)">
-                    <span class="dns-rec-type" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)"><i class="fas fa-times"></i> Taken</span>
-                    <span class="dns-rec-val font-mono" style="color:#ef4444;font-weight:600">${escHtml(d.domain)}</span>
-                    <span class="dns-rec-ttl" style="color:#fca5a5">${escHtml(d.details)}</span>
-                </div>`;
-            }
-        } catch (e) {
-            out.innerHTML = warn('Check failed: ' + e.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-cart-shopping"></i> Check if Available to Register';
-        }
-    });
 }

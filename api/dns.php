@@ -1780,7 +1780,7 @@ function getRdapUrl(string $tld): ?string
         'org'   => 'https://rdap.publicinterestregistry.org/rdap/domain/',
         'info'  => 'https://rdap.afilias-srs.net/v1/domain/',
         'eu'    => 'https://rdap.europa.eu/v1/domain/',
-        'be'    => 'https://rdap.be/domain/',
+        'be'    => null,
         'fr'    => 'https://rdap.nic.fr/domain/',
         'it'    => 'https://rdap.nic.it/domain/',
         'es'    => 'https://rdap.nic.es/domain/',
@@ -2228,10 +2228,111 @@ function parseWhoisRaw(string $raw): array
     return $result;
 }
 
+function queryDnsBelgiumApi(string $domain): ?array
+{
+    $tld = getWhoisTld($domain);
+    if ($tld !== 'be') return null;
+
+    $baseUrl = 'https://api.dnsbelgium.be/whois/registration/';
+    $regUrl = $baseUrl . urlencode($domain) . '/registrar';
+
+    $mh = curl_multi_init();
+    $h1 = curl_init($baseUrl . urlencode($domain));
+    curl_setopt_array($h1, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5,
+        CURLOPT_FOLLOWLOCATION => true, CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+    $h2 = curl_init($regUrl);
+    curl_setopt_array($h2, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5,
+        CURLOPT_FOLLOWLOCATION => true, CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+    curl_multi_add_handle($mh, $h1);
+    curl_multi_add_handle($mh, $h2);
+    do { curl_multi_exec($mh, $active); if ($active) curl_multi_select($mh, 1); } while ($active);
+    $body = curl_multi_getcontent($h1);
+    $regBody = curl_multi_getcontent($h2);
+    curl_multi_close($mh);
+    curl_close($h1);
+    curl_close($h2);
+
+    if (empty($body)) return null;
+
+    $data = json_decode($body, true);
+    if (!$data || !isset($data['domainInfo'])) return null;
+
+    $result = [];
+    $di = $data['domainInfo'];
+    $result['creation_date'] = $di['created'] ?? null;
+    $result['updated_date'] = $di['updated'] ?? null;
+    $result['registry_domain_id'] = $di['alabel'] ?? null;
+
+    // Registrar
+    if (!empty($regBody)) {
+        $reg = json_decode($regBody, true);
+        if (!empty($reg['companyName'])) $result['registrar'] = $reg['companyName'];
+    }
+
+    // Nameservers
+    $ns = [];
+    if (!empty($data['nameserverInfo']['nameservers'])) {
+        foreach ($data['nameserverInfo']['nameservers'] as $n) {
+            $name = strtolower($n['nameASCII'] ?? $n['name'] ?? '');
+            if ($name && !in_array($name, $ns)) $ns[] = $name;
+        }
+    }
+    $result['name_servers'] = $ns;
+
+    // Status flags
+    $statuses = [];
+    $apiStatus = $di['status'] ?? '';
+    if (stripos($apiStatus, 'InUse') !== false) $statuses[] = 'Active';
+    if (!empty($data['transferProhibitedStatus'])) {
+        if (!empty($data['transferProhibitedStatus']['serverTransferProhibited'])) $statuses[] = 'serverTransferProhibited';
+        if (!empty($data['transferProhibitedStatus']['transferProhibited'])) $statuses[] = 'transferProhibited';
+        if (!empty($data['transferProhibitedStatus']['maskedClientTransferProhibited'])) $statuses[] = 'clientTransferProhibited';
+    }
+    $result['domain_status'] = $statuses;
+
+    // Compute age
+    if ($result['creation_date']) {
+        $created = strtotime($result['creation_date']);
+        if ($created !== false) {
+            $result['domain_age_days'] = (int)round((time() - $created) / 86400);
+        }
+    }
+
+    return $result;
+}
+
 function whoisLookup(string $domain): array
 {
     $cached = dnsCacheGet($domain, 'WHOIS');
     if ($cached) return $cached;
+
+    // .be: use DNSBelgium API directly
+    $tld = getWhoisTld($domain);
+    if ($tld === 'be') {
+        $dbResult = queryDnsBelgiumApi($domain);
+        if ($dbResult) {
+            $emptyResult = [
+                'registrar' => null, 'creation_date' => null, 'expiration_date' => null,
+                'updated_date' => null, 'name_servers' => [], 'registrant_name' => null,
+                'registrant_organization' => null, 'registrant_country' => null,
+                'registrant_state' => null, 'registrant_city' => null, 'tech_name' => null,
+                'tech_organization' => null, 'tech_email' => null, 'billing_name' => null,
+                'billing_organization' => null, 'abuse_email' => null, 'abuse_phone' => null,
+                'domain_status' => [], 'dnssec' => null, 'registry_domain_id' => null,
+                'domain_age_days' => null, 'days_until_expiry' => null, 'whois_server' => 'api.dnsbelgium.be',
+                'raw' => null, 'status' => 'ok',
+            ];
+            foreach ($dbResult as $k => $v) {
+                if ($v !== null && $v !== [] && $v !== '') $emptyResult[$k] = $v;
+            }
+            dnsCacheSet($domain, 'WHOIS', $emptyResult);
+            return $emptyResult;
+        }
+    }
 
     $emptyResult = [
         'registrar' => null,
@@ -2575,12 +2676,16 @@ try { $result['txt'] = getTxtRecords($domain); } catch (Throwable $e) {
     $result['txt'] = ['status' => 'error', 'error' => $e->getMessage()];
 }
 
-try { $result['caa'] = getCaaRecords($domain); } catch (Throwable $e) {
-    $result['caa'] = ['status' => 'error', 'error' => $e->getMessage()];
-}
-
-try { $result['srv'] = getSrvRecords($domain); } catch (Throwable $e) {
-    $result['srv'] = ['status' => 'error', 'error' => $e->getMessage()];
+if (!$quickMode) {
+    try { $result['caa'] = getCaaRecords($domain); } catch (Throwable $e) {
+        $result['caa'] = ['status' => 'error', 'error' => $e->getMessage()];
+    }
+    try { $result['srv'] = getSrvRecords($domain); } catch (Throwable $e) {
+        $result['srv'] = ['status' => 'error', 'error' => $e->getMessage()];
+    }
+} else {
+    $result['caa'] = ['status' => 'skipped'];
+    $result['srv'] = ['status' => 'skipped'];
 }
 
 try { $result['soa'] = getSoaRecord($domain); } catch (Throwable $e) {
@@ -2591,8 +2696,12 @@ try { $result['spf'] = validateSpf($domain, $result['txt']); } catch (Throwable 
     $result['spf'] = ['status' => 'error', 'error' => $e->getMessage()];
 }
 
-try { $result['dkim'] = validateDkim($domain); } catch (Throwable $e) {
-    $result['dkim'] = ['status' => 'error', 'error' => $e->getMessage()];
+if (!$quickMode) {
+    try { $result['dkim'] = validateDkim($domain); } catch (Throwable $e) {
+        $result['dkim'] = ['status' => 'error', 'error' => $e->getMessage()];
+    }
+} else {
+    $result['dkim'] = ['status' => 'skipped', 'selectors' => [], 'found_selectors' => [], 'count' => 0];
 }
 
 try { $result['dmarc'] = validateDmarc($domain); } catch (Throwable $e) {
@@ -2611,8 +2720,12 @@ if (!$quickMode) {
     $result['delegation'] = ['status' => 'skipped'];
 }
 
-try { $result['reverse_dns'] = getReverseDns($domain); } catch (Throwable $e) {
-    $result['reverse_dns'] = ['status' => 'error', 'error' => $e->getMessage(), 'ptr_records' => [], 'a_records' => [], 'fcrdns' => [], 'mismatches' => []];
+if (!$quickMode) {
+    try { $result['reverse_dns'] = getReverseDns($domain); } catch (Throwable $e) {
+        $result['reverse_dns'] = ['status' => 'error', 'error' => $e->getMessage(), 'ptr_records' => [], 'a_records' => [], 'fcrdns' => [], 'mismatches' => []];
+    }
+} else {
+    $result['reverse_dns'] = ['status' => 'skipped'];
 }
 
 if (!$quickMode) {

@@ -19,19 +19,32 @@ $appName = APP_NAME;
     <title><?= $appName ?></title>
     <link rel="icon" type="image/png" href="ficksie_logo_nt.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/style.css?v=68">
+    <link rel="stylesheet" href="assets/css/style.css?v=88">
 </head>
 <body>
     <div id="app">
+        <div class="brand-bar" id="brandBar">
+            <div class="logo">
+                <div class="logo-images">
+                    <img src="ficksie_logo_nt.png" alt="<?= $appName ?>" class="logo-img">
+                    <div class="logo-text">
+                        <img src="ficksie_logo_t.png" alt="<?= $appName ?>" class="logo-text-img">
+                        <div class="slogan">Niet moeilijk doen, ficksie het ff</div>
+                    </div>
+                </div>
+            </div>
+            <div class="brand-bar-right">
+                <div class="brand-tool-info">
+                    <h1 id="pageTitle">Dashboard</h1>
+                    <p id="pageSubtitle" class="text-muted">Your central workspace</p>
+                </div>
+                <button class="btn btn-icon" id="themeToggle" title="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </div>
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div class="logo">
-                    <div class="logo-images">
-                        <img src="ficksie_logo_nt.png" alt="<?= $appName ?>" class="logo-img">
-                        <img src="ficksie_logo_t.png" alt="<?= $appName ?>" class="logo-text-img">
-                    </div>
-                    <div class="slogan">Niet moeilijk doen, ficksie het ff</div>
-                </div>
                 <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
                     <i class="fas fa-chevron-left"></i>
                 </button>
@@ -94,18 +107,6 @@ $appName = APP_NAME;
         </aside>
 
         <main class="main-content" id="mainContent">
-            <header class="content-header">
-                <div class="header-left">
-                    <h1 id="pageTitle">Dashboard</h1>
-                    <p id="pageSubtitle" class="text-muted">Niet moeilijk doen. <?= $appName ?> het ff</p>
-                </div>
-                <div class="header-actions">
-                    <button class="btn btn-icon" id="themeToggle" title="Toggle theme">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                </div>
-            </header>
-
             <div class="tab-bar" id="tabBar" style="display:none"></div>
 
             <div class="content-body" id="contentBody">
@@ -322,7 +323,7 @@ $appName = APP_NAME;
 
     <!-- Toast container -->
     <div class="toast-container" id="toastContainer"></div>
-<script src="assets/js/dns.js?v=23"></script>
+<script src="assets/js/dns.js?v=32"></script>
 <script src="assets/js/password-generator.js?v=21"></script>
 <script src="assets/js/ssl-tools.js?v=8"></script>
 
