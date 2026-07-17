@@ -1779,7 +1779,7 @@ function getRdapUrl(string $tld): ?string
         'uk'    => 'https://rdap.nominet.uk/uk/domain/',
         'org'   => 'https://rdap.publicinterestregistry.org/rdap/domain/',
         'info'  => 'https://rdap.afilias-srs.net/v1/domain/',
-        'eu'    => 'https://rdap.europa.eu/v1/domain/',
+        'eu'    => null, // rdap.europa.eu unreachable — falls back to HTTP WHOIS + port 43
         'be'    => null,
         'fr'    => 'https://rdap.nic.fr/domain/',
         'it'    => 'https://rdap.nic.it/domain/',
@@ -2009,11 +2009,11 @@ function getWhoisServer(string $tld): ?string
 
 function queryWhoisServer(string $server, string $domain): ?string
 {
-    $fp = @fsockopen($server, 43, $errno, $errstr, 8);
+    $fp = @fsockopen($server, 43, $errno, $errstr, 10);
     if (!$fp) return null;
     fwrite($fp, "$domain\r\n");
     $raw = '';
-    stream_set_timeout($fp, 8);
+    stream_set_timeout($fp, 10);
     while (!feof($fp)) {
         $chunk = fread($fp, 8192);
         if ($chunk === false) break;
@@ -2023,8 +2023,34 @@ function queryWhoisServer(string $server, string $domain): ?string
     return !empty($raw) ? $raw : null;
 }
 
-function queryWhoisHttp(string $domain): ?string
+function queryWhoisHttp(string $domain, string $source = 'whois.com'): ?string
 {
+    if ($source === 'who.is') {
+        $ch = @curl_init("https://who.is/whois/" . urlencode($domain));
+        if (!$ch) return null;
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        ]);
+        $html = @curl_exec($ch);
+        $code = @curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        @curl_close($ch);
+        if (!$html || $code !== 200) return null;
+        // who.is embeds raw WHOIS in Next.js RSC payload as a text chunk
+        if (preg_match('/self\.__next_f\.push\(\[1,"([^"]*% The WHOIS service[^"]*?)"\]\)/s', $html, $m)) {
+            $raw = json_decode('"' . $m[1] . '"');
+            if ($raw) return $raw;
+        }
+        // Fallback: check for <pre> tag
+        if (preg_match('/<pre[^>]*>(.*?)<\/pre>/is', $html, $m)) {
+            $raw = html_entity_decode(trim($m[1]));
+            if (!empty($raw)) return $raw;
+        }
+        return null;
+    }
+
     $ch = @curl_init("https://www.whois.com/whois/" . urlencode($domain));
     if (!$ch) return null;
     curl_setopt_array($ch, [
@@ -2089,7 +2115,7 @@ function parseWhoisRaw(string $raw): array
             $sectionLines = 0;
             continue;
         }
-        if (preg_match('/^(?:Domain\s+)?[Nn]ameservers?:\s*$/i', $trimmed)) {
+        if (preg_match('/^(?:Domain\s+)?[Nn]ame\s*servers?:\s*$/i', $trimmed)) {
             $section = 'nameservers';
             $sectionLines = 0;
             continue;
@@ -2332,6 +2358,35 @@ function whoisLookup(string $domain): array
             dnsCacheSet($domain, 'WHOIS', $emptyResult);
             return $emptyResult;
         }
+    }
+
+    // .eu: RDAP unreachable, port 43 blocked from web server, whois.com unreliable
+    // Use who.is HTTP scraping which embeds raw WHOIS data in the page
+    if ($tld === 'eu') {
+        $euResult = [
+            'registrar' => null, 'creation_date' => null, 'expiration_date' => null,
+            'updated_date' => null, 'name_servers' => [], 'registrant_name' => null,
+            'registrant_organization' => null, 'registrant_country' => null,
+            'registrant_state' => null, 'registrant_city' => null, 'tech_name' => null,
+            'tech_organization' => null, 'tech_email' => null, 'billing_name' => null,
+            'billing_organization' => null, 'abuse_email' => null, 'abuse_phone' => null,
+            'domain_status' => [], 'dnssec' => null, 'registry_domain_id' => null,
+            'domain_age_days' => null, 'days_until_expiry' => null,
+            'whois_server' => 'who.is', 'raw' => null, 'status' => 'ok',
+        ];
+        $raw = queryWhoisHttp($domain, 'who.is');
+        if (empty($raw)) $raw = queryWhoisHttp($domain);
+        if (!empty($raw)) {
+            $euResult['raw'] = mb_substr($raw, 0, 3000);
+            $parsed = parseWhoisRaw($raw);
+            foreach ($parsed as $k => $v) {
+                if ($v !== null && $v !== [] && $v !== '') $euResult[$k] = $v;
+            }
+        } else {
+            $euResult['status'] = 'unavailable';
+        }
+        dnsCacheSet($domain, 'WHOIS', $euResult);
+        return $euResult;
     }
 
     $emptyResult = [
@@ -2720,12 +2775,8 @@ if (!$quickMode) {
     $result['delegation'] = ['status' => 'skipped'];
 }
 
-if (!$quickMode) {
-    try { $result['reverse_dns'] = getReverseDns($domain); } catch (Throwable $e) {
-        $result['reverse_dns'] = ['status' => 'error', 'error' => $e->getMessage(), 'ptr_records' => [], 'a_records' => [], 'fcrdns' => [], 'mismatches' => []];
-    }
-} else {
-    $result['reverse_dns'] = ['status' => 'skipped'];
+try { $result['reverse_dns'] = getReverseDns($domain); } catch (Throwable $e) {
+    $result['reverse_dns'] = ['status' => 'error', 'error' => $e->getMessage(), 'ptr_records' => [], 'a_records' => [], 'fcrdns' => [], 'mismatches' => []];
 }
 
 if (!$quickMode) {

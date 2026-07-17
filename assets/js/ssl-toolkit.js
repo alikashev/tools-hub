@@ -1,5 +1,5 @@
 /**
- * SSL/TLS Toolkit — 3 Merged Tools
+ * SSL/TLS — 3 Merged Tools
  */
 
 const sslState = {
@@ -14,7 +14,7 @@ const sslTools = [
 ];
 
 function renderSslToolkit() {
-    setPageTitle('SSL/TLS Toolkit', 'Certificates, chains, TLS versions & HSTS');
+    setPageTitle('Certificate Autopsy', 'Dissecting trust chains and their existential crises');
     const body = getActiveBody();
     sslState.activeTool = 'audit';
 
@@ -153,8 +153,10 @@ function sslBuildAuditHtml(data) {
     else if (!cert.valid) { overallType = 'danger'; overallText = 'Certificate Invalid'; }
     else if (chain.chain_valid === false) { overallType = 'danger'; overallText = 'Chain Invalid — Server Misconfigured'; }
     else if (chain.verified_with_cas === false) { overallType = 'danger'; overallText = 'Incomplete Chain — Missing Root CA'; }
-    else if (chain.root_self_signed === false && chain.verified_with_cas !== true && chain.chain && chain.chain.length > 0) { overallType = 'warning'; overallText = 'Chain Does Not Reach Trusted Root'; }
+    else if (chain.root_self_signed === false && chain.verified_with_cas === false && chain.chain && chain.chain.length > 0) { overallType = 'warning'; overallText = 'Chain Does Not Reach Trusted Root'; }
     else if ((tls.security_notes || []).some(n => n && !n.startsWith('Excellent'))) { overallType = 'warning'; overallText = 'Security Warnings Found'; }
+    else if (hsts && hsts.hsts && !hsts.hsts.header_present) { overallType = 'warning'; overallText = 'HSTS Not Configured'; }
+    else if (hsts && hsts.grade && hsts.grade !== 'A') { overallType = 'warning'; overallText = 'HSTS Needs Improvement'; }
 
     html += `
         <div class="ssl-result-header">
@@ -214,7 +216,7 @@ function sslBuildAuditHtml(data) {
     // ── Chain Section
     if (chain && chain.chain) {
         const lastCert = chain.chain[chain.chain.length - 1];
-        const missingRoot = !chain.root_self_signed && chain.verified_with_cas !== true;
+        const missingRoot = !chain.root_self_signed && chain.verified_with_cas === false;
 
         let chainType, chainText;
         if (chain.chain_valid === false) { chainType = 'danger'; chainText = 'Broken'; }

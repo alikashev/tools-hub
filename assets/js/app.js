@@ -218,17 +218,17 @@ const TAB_MAX = 5;
 let tabState = { tabs: [], activeTab: null };
 
 const viewMeta = {
-    'dashboard':          { title: 'Dashboard',          subtitle: 'Your central workspace',        icon: 'fa-th-large' },
-    'commands':           { title: 'Commands',           subtitle: 'Manage your Linux commands',     icon: 'fa-terminal' },
-    'email-anonymizer':   { title: 'Email Anonymizer',   subtitle: 'Mask email addresses for privacy', icon: 'fa-mask' },
-    'email-header-viz':   { title: 'Header Visualizer',  subtitle: 'Parse and analyze email headers', icon: 'fa-code-branch' },
-    'snippets':           { title: 'Snippets',           subtitle: 'Save and copy standard email responses', icon: 'fa-reply' },
-    'rte-editor':         { title: 'Text Editor',        subtitle: 'Format and create rich text documents', icon: 'fa-file-lines' },
-    'ip-reputation':      { title: 'IP Reputation',      subtitle: 'Analyze IP addresses for security', icon: 'fa-shield-halved' },
-    'dns-lookup':         { title: 'DNS Lookup',         subtitle: 'Query DNS records',               icon: 'fa-globe' },
-    'password-generator': { title: 'Password Generator', subtitle: 'Create secure passwords',         icon: 'fa-key' },
-    'ssl-toolkit':        { title: 'SSL/TLS Toolkit',    subtitle: 'Certificates, chains, TLS & HSTS', icon: 'fa-shield-halved' },
-    'users':              { title: 'Manage Users',       subtitle: 'Create and manage user accounts', icon: 'fa-users' },
+    'dashboard':          { title: 'CMD CTRL',              tabLabel: 'Dashboard',        subtitle: 'Sanctum sanctorum of your digital hegemony',        icon: 'fa-th-large' },
+    'commands':           { title: 'Incantation Ledger',     tabLabel: 'Commands',         subtitle: 'Where arcane shell sorcery lives on',     icon: 'fa-terminal' },
+    'email-anonymizer':   { title: 'Cryptographic Shroud',   tabLabel: 'Email Anonymizer', subtitle: 'Obscuring digital identities since the invention of shame', icon: 'fa-mask' },
+    'email-header-viz':   { title: 'SMTP Archaeology',      tabLabel: 'Header Visualizer',subtitle: 'Exhuming forensic traces from your inbound missives', icon: 'fa-code-branch' },
+    'snippets':           { title: 'Copypasta Armory',       tabLabel: 'Snippets',         subtitle: 'Weaponized prose for the diplomatically bankrupt', icon: 'fa-reply' },
+    'rte-editor':         { title: 'Semantic Forge',         tabLabel: 'Text Editor',      subtitle: 'Artisanal typesetting for the aesthetically unhinged', icon: 'fa-file-lines' },
+    'ip-reputation':      { title: 'Geopolitical Sentinel',  tabLabel: 'IP Reputation',    subtitle: 'Profiling interlocutors by their network pedigree', icon: 'fa-shield-halved' },
+    'dns-lookup':         { title: 'Nomenclature Oracle',    tabLabel: 'DNS Lookup',       subtitle: 'Interrogating the hierarchical phonebook of the internet', icon: 'fa-globe' },
+    'password-generator': { title: 'Entropy Fabricator',     tabLabel: 'Password Generator',subtitle: 'Concocting unhackable gibberish so you don\'t have to', icon: 'fa-key' },
+    'ssl-toolkit':        { title: 'Certificate Autopsy',    tabLabel: 'SSL/TLS',  subtitle: 'Dissecting trust chains and their existential crises', icon: 'fa-shield-halved' },
+    'users':              { title: 'Fiefdom Registry',       tabLabel: 'Manage Users',     subtitle: 'Administering the plebeian access roster', icon: 'fa-users' },
 };
 
 function getActiveBody() {
@@ -245,12 +245,12 @@ function renderTabBar() {
     if (!bar) return;
     bar.style.display = tabState.tabs.length > 0 ? '' : 'none';
     bar.innerHTML = tabState.tabs.map(tab => {
-        const meta = viewMeta[tab.view] || { title: tab.view, icon: 'fa-cube' };
+        const meta = viewMeta[tab.view] || { title: tab.view, tabLabel: tab.view, icon: 'fa-cube' };
         const isActive = tab.id === tabState.activeTab;
         const closeBtn = tab.view !== 'dashboard' ? `<span class="tab-close" data-tab-close="${tab.id}" title="Close tab">&times;</span>` : '';
         return `<button class="tab-item ${isActive ? 'active' : ''}" data-tab-id="${tab.id}">
             <i class="fas ${meta.icon}"></i>
-            <span>${meta.title}</span>
+            <span>${meta.tabLabel}</span>
             ${closeBtn}
         </button>`;
     }).join('');
@@ -440,7 +440,7 @@ function navigate(view) {
 // Dashboard
 // ============================================
 async function renderDashboard() {
-    setPageTitle('Dashboard', 'Your central workspace');
+    setPageTitle('CMD CTRL', 'Sanctum sanctorum of your digital hegemony');
 
     const body = getActiveBody();
 
@@ -508,14 +508,128 @@ async function renderDashboard() {
             {
                 key: 'ssl-toolkit',
                 icon: 'fa-shield-halved',
-                name: 'SSL/TLS Toolkit',
+                name: 'SSL/TLS',
                 desc: 'Check certificates, chains, TLS versions & HSTS',
                 color: '#34d399',
             },
         ];
 
+        const crmLinks = [
+            { name: 'Argeweb', url: 'https://adminarge.argewebhosting.nl/index.php?pag=zoek_klant', color: '#e53935', initials: 'AW' },
+            { name: 'De Heeg', url: 'https://admin.deheeg.nl/', color: '#1565c0', initials: 'DH' },
+            {
+                name: 'Flexwebhosting', url: 'https://core2.fxwregistratie.nl/', color: '#f7931e', initials: 'FX',
+                children: [
+                    { name: 'FXW Panel', url: 'https://www.fxwpanel.nl/index.php?function=login', icon: 'fa-gauge' },
+                    { name: 'FXW DNS Panel', url: 'https://fxw.dnspaneel.nl/', icon: 'fa-globe' },
+                    { name: 'Excasso', url: 'https://yourholding.sharepoint.com/:x:/r/sites/KS/_layouts/15/doc2.aspx?sourcedoc=%7B9683EFF7-337D-4AB0-8DA6-6DC9DC742A96%7D&file=Flex%20Excasso%202023.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1&ct=1723111290515&wdOrigin=OFFICECOM-WEB.MAIN.REC&cid=513c6af7-aa2c-4065-9d4f-f8067122d432&wdPreviousSessionSrc=HarmonyWeb&wdPreviousSession=2d02fdf5-486d-4c56-93fb-ac0169795fe1', icon: 'fa-file-excel' },
+                    { name: 'Rundeck', url: 'https://rundeck.fxw.nl/user/login', icon: 'fa-cogs' },
+                ],
+            },
+            {
+                name: 'Neostrada', url: 'https://am.qwh.nl/admin/manage-hosting', color: '#e8530e', initials: 'NE',
+                children: [
+                    { name: 'Klantenpaneel', url: 'https://www.neostrada.nl/mijn-account/overzicht.html', icon: 'fa-user' },
+                    { name: 'Domeinsysteem', url: 'https://www.domeinsysteem.nl/overzicht.html', icon: 'fa-globe' },
+                    { name: 'Neostrada old', url: 'https://am.neostrada.nl/', icon: 'fa-clock-rotate-left' },
+                ],
+            },
+            {
+                name: 'Pcextreme', url: 'https://cp.pcextreme.nl/', color: '#d32f2f', initials: 'PC',
+                children: [
+                    { name: 'Payments', url: 'https://payments.dev.pcextreme.nl/invoices', icon: 'fa-credit-card' },
+                    { name: 'Admin', url: 'https://admin.pcextreme.nl/?page=search&mode=advanced', icon: 'fa-search' },
+                    { name: 'Admin Dev', url: 'https://admin.dev.pcextreme.nl/', icon: 'fa-code' },
+                ],
+            },
+            { name: 'Real Hosting', url: 'https://admin.realcloud.nl/', color: '#0097a7', initials: 'RH' },
+            { name: 'SoHosted', url: 'https://beheer.hq.sohosted.org/beheer?ho5rj3q2qt4nkr4zwnvafl5i6m=jle1obau8muopflyxfTvt0fSCk7SxD2xzpRM0rvuRPLJKusYd67bsZl3okrhAoMeQ15GlHM9', color: '#1a73e8', initials: 'SH' },
+            { name: 'Vevida', url: 'https://our.vevida.net/account.xhtml', color: '#4caf50', initials: 'VE' },
+            { name: 'Versio 1.0', url: 'https://www.versio.nl/employee_povavi/', color: '#00a19a', initials: 'V1' },
+            { name: 'Versio 2.0', url: 'https://admin.mijn.versio.nl/nova/dashboards/main', color: '#00a19a', initials: 'V2' },
+            { name: 'VIP', url: 'https://hostfact.provider.nl/Pro/index.php', color: '#2e7d9c', icon: 'fa-crown' },
+            { name: 'Yourhosting 1.0', url: 'https://crm.yhkantoor.nl/', color: '#ff6b35', initials: 'Y1' },
+            { name: 'Yourhosting 2.0', url: 'https://admin.account.yourhosting.nl/nova/dashboards/main', color: '#ff6b35', initials: 'Y2' },
+        ];
+
+        const externalTools = [
+            { name: 'BaseKit CP', url: 'http://control.bk-partners1.co.uk/login', initials: 'BK', color: '#2d9cdb' },
+            { name: 'Blacklist', url: 'https://blacklist.bulkje.nl/', icon: 'fa-ban', color: '#e74c3c' },
+            { name: 'CNR', url: 'https://account.centralnicreseller.com/domain/configure/params/domain/', initials: 'CN', color: '#2c3e50' },
+            { name: 'Daywize', url: 'https://daywize.mendixcloud.com/index.html', initials: 'DW', color: '#0595db' },
+            { name: 'Email', url: 'https://outlook.office.com/mail/?login_hint=ali.kashev%40yourhosting.nl', icon: 'fa-envelope', color: '#0078d4' },
+            { name: 'GoSkills', url: 'https://yourhosting.goskills.com/login', initials: 'GS', color: '#9b59b6' },
+            { name: 'Intranet', url: 'https://yourholding.sharepoint.com/sites/Intranet', icon: 'fa-building', color: '#0078d4' },
+            { name: 'MS Partner', url: 'https://partner.microsoft.com/dashboard/v2/customers/list', icon: 'fa-microsoft', color: '#00a4ef' },
+            { name: 'Openprovider', url: 'https://cp.openprovider.eu/account/twofactor.php', initials: 'OP', color: '#6c63ff' },
+            { name: 'Payt', url: 'https://app.paytsoftware.com/', initials: 'PA', color: '#3498db' },
+            { name: 'Puzzel', url: 'https://app.puzzel.com/agent/', icon: 'fa-phone', color: '#1abc9c' },
+            { name: 'Realtime Register', url: 'https://dm.realtimeregister.com/app/login', initials: 'RR', color: '#00b4d8' },
+            { name: 'SIDN', url: 'https://authentication.sidn.nl/idp/SSO.saml2', icon: 'fa-id-badge', color: '#003580' },
+            { name: 'ScoreBuddy', url: 'https://yourhosting.scorebuddylms.com/dashboard', initials: 'SB', color: '#4a90d9' },
+            { name: 'Systeembeheer', url: 'https://yh-jira.atlassian.net/servicedesk/customer/portal/2', icon: 'fa-headset', color: '#0052cc' },
+            { name: 'WFM Agent', url: 'https://wfmagent.puzzel.com/loggedin', initials: 'WF', color: '#27ae60' },
+            { name: 'Wiki 2.0', url: 'https://wiki.bulkje.nl/', icon: 'fa-book', color: '#8e44ad' },
+            { name: 'YourAdvice', url: 'https://yoursitehulp.nl/youradvice/#', initials: 'YA', color: '#f39c12' },
+            { name: 'YourCredify', url: 'https://yourcredify.nl/', initials: 'YC', color: '#2ecc71' },
+        ];
+
+        function renderCrmLink(c) {
+            const iconHtml = c.icon
+                ? `<i class="fas ${c.icon}"></i>`
+                : `<span style="font-size:1.3rem;font-weight:800;letter-spacing:-0.5px">${escHtml(c.initials)}</span>`;
+            if (c.children && c.children.length) {
+                return `
+                    <div class="dash-crm-group" style="border-left:3px solid ${c.color}">
+                        <a class="dash-crm-link" href="${c.url}" target="_blank" rel="noopener noreferrer">
+                            <div class="dash-crm-icon" style="background:${c.color};color:#fff">
+                                ${iconHtml}
+                            </div>
+                            <span class="dash-crm-name">${c.name}</span>
+                            <i class="fas fa-external-link-alt dash-crm-arrow"></i>
+                        </a>
+                        <div class="dash-crm-sub">
+                            ${c.children.map(ch => `
+                                <a class="dash-crm-sublink" href="${ch.url}" target="_blank" rel="noopener noreferrer">
+                                    <i class="fas ${ch.icon}"></i>
+                                    <span>${ch.name}</span>
+                                </a>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            return `
+                <a class="dash-crm-link" href="${c.url}" target="_blank" rel="noopener noreferrer">
+                    <div class="dash-crm-icon" style="background:${c.color};color:#fff">
+                        ${iconHtml}
+                    </div>
+                    <span class="dash-crm-name">${c.name}</span>
+                    <i class="fas fa-external-link-alt dash-crm-arrow"></i>
+                </a>
+            `;
+        }
+
         body.innerHTML = `
             <div class="dashboard">
+                <div class="dash-section-label">CRM & Provider Links</div>
+                <div class="dash-crm-grid">
+                    ${crmLinks.map(c => renderCrmLink(c)).join('')}
+                </div>
+
+                <div class="dash-section-label" style="margin-top:32px;">External Tools</div>
+                <div class="dash-crm-grid">
+                    ${externalTools.map(c => `
+                        <a class="dash-crm-link" href="${c.url}" target="_blank" rel="noopener noreferrer">
+                            <div class="dash-crm-icon" style="background:${c.color};color:#fff">
+                                ${c.icon ? `<i class="fas ${c.icon}"></i>` : `<span style="font-size:1.3rem;font-weight:800;letter-spacing:-0.5px">${escHtml(c.initials)}</span>`}
+                            </div>
+                            <span class="dash-crm-name">${c.name}</span>
+                            <i class="fas fa-external-link-alt dash-crm-arrow"></i>
+                        </a>
+                    `).join('')}
+                </div>
+
                 <div class="dash-stats">
                     <div class="dash-stat">
                         <div class="dash-stat-icon blue"><i class="fas fa-terminal"></i></div>
@@ -574,7 +688,7 @@ async function renderDashboard() {
 let commandSearchTimeout = null;
 
 async function renderCommands() {
-    setPageTitle('Commands', 'Manage your Linux commands');
+    setPageTitle('Incantation Ledger', 'Where arcane shell sorcery lives on');
 
     const body = getActiveBody();
     body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Loading commands...</span></div>';
@@ -756,7 +870,7 @@ function attachCommandCardEvents() {
 // Categories View (Standalone)
 // ============================================
 async function renderCategoriesView() {
-    setPageTitle('Categories', 'Manage command categories');
+    setPageTitle('Categories', 'Curating the grimoire of classified incantations');
 
     const body = getActiveBody();
     body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Loading categories...</span></div>';
@@ -988,7 +1102,7 @@ function anonymizeEmail(email) {
 }
 
 function renderEmailAnonymizer() {
-    setPageTitle('Email Anonymizer', 'Mask email addresses for privacy');
+    setPageTitle('Cryptographic Shroud', 'Obscuring digital identities since the invention of shame');
 
     const body = getActiveBody();
     body.innerHTML = `
@@ -1088,7 +1202,7 @@ function renderEmailAnonymizer() {
 // Email Header Visualizer
 // ============================================
 function renderEmailHeaderViz() {
-    setPageTitle('Header Visualizer', 'Parse and analyze email headers');
+    setPageTitle('SMTP Archaeology', 'Exhuming forensic traces from your inbound missives');
 
     const body = getActiveBody();
     body.innerHTML = `
@@ -1579,7 +1693,7 @@ X-Spam-Status: Yes, score=6.8 required=5.0 tests=AYES,RCVD_IN_DNSWL_NONE,T_RP_MA
 // IP Reputation Checker
 // ============================================
 function renderIpReputation() {
-    setPageTitle('IP Reputation', 'Analyze IP addresses for security and reputation');
+    setPageTitle('Geopolitical Sentinel', 'Profiling interlocutors by their network pedigree');
 
     const body = getActiveBody();
     const searchHistory = JSON.parse(localStorage.getItem('ip-history') || '[]');
@@ -1940,7 +2054,7 @@ function renderIpReputation() {
 // User Management (Admin only)
 // ============================================
 async function renderUserManagement() {
-    setPageTitle('Manage Users', 'Create and manage user accounts');
+    setPageTitle('Fiefdom Registry', 'Administering the plebeian access roster');
 
     const body = getActiveBody();
     body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i><span>Loading users...</span></div>';
@@ -2169,7 +2283,7 @@ async function confirmDeleteUser(id, username) {
 // Snippets
 // ============================================
 async function renderSnippets() {
-    setPageTitle('Snippets', 'Save and copy standard email responses');
+    setPageTitle('Copypasta Armory', 'Weaponized prose for the diplomatically bankrupt');
 
     const body = getActiveBody();
 
@@ -2821,7 +2935,7 @@ let rteState = {
 };
 
 function renderRichTextEditor() {
-    setPageTitle('Text Editor', 'Format and create rich text documents');
+    setPageTitle('Semantic Forge', 'Artisanal typesetting for the aesthetically unhinged');
 
     const body = getActiveBody();
     rteState.templates = JSON.parse(localStorage.getItem('rte-templates') || '[]');

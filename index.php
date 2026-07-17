@@ -18,8 +18,11 @@ $appName = APP_NAME;
     <meta name="color-scheme" content="dark">
     <title><?= $appName ?></title>
     <link rel="icon" type="image/png" href="ficksie_logo_nt.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/style.css?v=88">
+    <link rel="stylesheet" href="assets/css/style.css?v=100">
 </head>
 <body>
     <div id="app">
@@ -87,9 +90,9 @@ $appName = APP_NAME;
                     <i class="fas fa-key"></i>
                     <span class="nav-pill-label">Password Generator</span>
                 </a>
-                <a class="nav-pill" data-view="ssl-toolkit" title="SSL/TLS Toolkit">
+                <a class="nav-pill" data-view="ssl-toolkit" title="SSL/TLS">
                     <i class="fas fa-shield-halved"></i>
-                    <span class="nav-pill-label">SSL/TLS Toolkit</span>
+                    <span class="nav-pill-label">SSL/TLS</span>
                 </a>
                 <a class="nav-pill admin-only" data-view="users" title="Manage Users">
                     <i class="fas fa-users"></i>
@@ -323,10 +326,10 @@ $appName = APP_NAME;
 
     <!-- Toast container -->
     <div class="toast-container" id="toastContainer"></div>
-<script src="assets/js/dns.js?v=32"></script>
-<script src="assets/js/password-generator.js?v=21"></script>
-<script src="assets/js/ssl-tools.js?v=8"></script>
+<script src="assets/js/dns.js?v=40"></script>
+<script src="assets/js/password-generator.js?v=22"></script>
+<script src="assets/js/ssl-toolkit.js?v=7"></script>
 
-    <script src="assets/js/app.js?v=45"></script>
+    <script src="assets/js/app.js?v=116"></script>
 </body>
 </html>

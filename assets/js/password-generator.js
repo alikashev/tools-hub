@@ -301,7 +301,7 @@ function pgEscHtml(s) {
 
 /* ─── Render ─────────────────────────────────────────────────────────── */
 function renderPasswordGenerator() {
-    setPageTitle('Password Generator', 'Create secure, custom passwords instantly');
+    setPageTitle('Entropy Fabricator', 'Concocting unhackable gibberish so you don\'t have to');
 
     const body = getActiveBody();
     pgState.showPassword = false;

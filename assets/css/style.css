@@ -209,15 +209,27 @@ a:hover { color: var(--accent-hover); }
     white-space: nowrap;
 }
 .brand-tool-info h1 {
-    font-size: 1.3rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-family: 'VT323', 'Share Tech Mono', 'Courier New', monospace;
+    font-size: 1.6rem;
+    font-weight: 400;
+    letter-spacing: 0.06em;
     line-height: 1.2;
+    color: var(--text-primary);
+    text-shadow: 0 0 10px rgba(108, 99, 255, 0.3);
+    transition: text-shadow 0.3s ease, color 0.3s ease;
 }
+
+.brand-tool-info h1:hover {
+    text-shadow: 0 0 16px rgba(108, 99, 255, 0.5), 0 0 32px rgba(108, 99, 255, 0.2);
+    color: var(--accent);
+}
+
 .brand-tool-info p {
-    font-size: 0.85rem;
+    font-family: 'Share Tech Mono', 'VT323', 'Courier New', monospace;
+    font-size: 0.82rem;
     color: var(--text-muted);
     line-height: 1.3;
+    letter-spacing: 0.04em;
 }
 
 /* ============================================
@@ -777,6 +789,128 @@ a:hover { color: var(--accent-hover); }
 
 .dash-tool:hover .dash-tool-action {
     gap: 12px;
+}
+
+/* --- CRM Links Grid --- */
+.dash-crm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.dash-crm-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: all var(--transition);
+    cursor: pointer;
+}
+
+.dash-crm-link:hover {
+    border-color: var(--border-hover, var(--border-color));
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.dash-crm-icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.dash-crm-name {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dash-crm-arrow {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity var(--transition), transform var(--transition);
+}
+
+.dash-crm-link:hover .dash-crm-arrow {
+    opacity: 1;
+    transform: translateX(2px);
+}
+
+/* --- CRM Grouped Items (with sub-links) --- */
+.dash-crm-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: all var(--transition);
+    overflow: hidden;
+}
+
+.dash-crm-group:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-md);
+}
+
+.dash-crm-group .dash-crm-link {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.dash-crm-group .dash-crm-link:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.dash-crm-sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px 10px 12px;
+}
+
+.dash-crm-sublink {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--bg-tertiary, rgba(128,128,128,0.08));
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.dash-crm-sublink:hover {
+    background: var(--accent-light, rgba(108,99,255,0.1));
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.dash-crm-sublink i {
+    font-size: 0.72rem;
+    opacity: 0.7;
 }
 
 /* --- Categories Grid (Standalone) --- */
@@ -4595,6 +4729,31 @@ a:hover { color: var(--accent-hover); }
     font-size: 0.78rem; color: var(--text-muted);
     white-space: nowrap; flex-shrink: 0;
 }
+
+/* --- Control Panel Login Button --- */
+.dns-rec-cp-btn {
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px;
+    background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 4px;
+    color: #3b82f6; font-size: 0.78rem; font-weight: 600;
+    white-space: nowrap; text-decoration: none;
+    transition: all 150ms;
+    flex-shrink: 0;
+}
+.dns-rec-cp-btn:hover {
+    background: rgba(59,130,246,0.25); border-color: #3b82f6;
+    color: #fff;
+}
+.dns-rec-cp-btn.dns-rec-cp-plesk {
+    background: rgba(249,115,22,0.12); border-color: rgba(249,115,22,0.3);
+    color: #f97316;
+}
+.dns-rec-cp-btn.dns-rec-cp-plesk:hover {
+    background: rgba(249,115,22,0.25); border-color: #f97316;
+    color: #fff;
+}
 .dns-rec-status {
     font-size: 0.85rem; font-weight: 700;
     white-space: nowrap; flex-shrink: 0;
@@ -5450,6 +5609,46 @@ a:hover { color: var(--accent-hover); }
 .ssl-chain-invalid { border-color: var(--danger) !important; }
 .ssl-chain-invalid .ssl-chain-badge { color: var(--danger) !important; }
 .ssl-chain-card-body { padding: 8px 12px; }
+.ssl-chain-missing .ssl-chain-card-missing {
+    border: 2px dashed var(--danger); background: rgba(239,68,68,0.04);
+}
+.ssl-chain-badge-missing {
+    background: var(--danger); color: #fff !important; font-size: 0.75rem;
+    padding: 3px 10px; border-radius: 4px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 5px;
+}
+.ssl-missing-note {
+    font-size: 0.82rem; color: var(--text-muted); padding: 4px 0 2px;
+}
+
+/* Chain alert box */
+.ssl-chain-alert {
+    display: flex; gap: 16px; padding: 16px; margin-bottom: 16px;
+    background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.25);
+    border-radius: var(--radius-sm);
+}
+.ssl-chain-alert-icon {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--danger); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; flex-shrink: 0;
+}
+.ssl-chain-alert-body h4 {
+    margin: 0 0 6px; font-size: 1rem; color: var(--danger);
+}
+.ssl-chain-alert-body p {
+    margin: 0 0 12px; font-size: 0.88rem; line-height: 1.5; color: var(--text-primary);
+}
+.ssl-chain-alert-detail {
+    display: flex; flex-direction: column; gap: 8px;
+}
+.ssl-chain-alert-detail-item {
+    display: flex; gap: 10px; font-size: 0.85rem; align-items: baseline;
+}
+.ssl-chain-alert-label {
+    font-weight: 700; color: var(--text-secondary); min-width: 90px; flex-shrink: 0;
+}
+.ssl-chain-alert-value { color: var(--text-primary); line-height: 1.45; }
 
 /* TLS grid */
 .ssl-tls-grid {

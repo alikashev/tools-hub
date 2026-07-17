@@ -17,7 +17,7 @@ if ($calledDirectly) {
     cors();
 }
 
-@set_time_limit(30);
+@set_time_limit(90);
 
 $action = $_GET['action'] ?? '';
 $domain = isset($_GET['domain']) ? strtolower(trim($_GET['domain'])) : '';
@@ -212,6 +212,9 @@ function doChainCheck(string $domain, int $port): void
         $issuer  = $parsed['issuer'] ?? [];
         $now = time();
 
+        $pemOut = '';
+        @openssl_x509_export($certPem, $pemOut);
+
         $chain[] = [
             'index'          => $idx,
             'common_name'    => $subject['CN'] ?? '',
@@ -225,41 +228,62 @@ function doChainCheck(string $domain, int $port): void
                                 && ($subject['O'] ?? '') === ($issuer['O'] ?? '')),
             'fingerprint_sha256' => openssl_x509_fingerprint($certPem, 'sha256'),
             'serial'         => $parsed['serialNumberHex'] ?? $parsed['serialNumber'] ?? '',
+            '_pem'           => $pemOut,
         ];
     }
 
-    // Validate chain: each cert's issuer should match the next cert's subject
+    // Verify chain linking using openssl_x509_verify with PEM strings (pure PHP)
     $chainValid = true;
     $chainErrors = [];
     for ($i = 0; $i < count($chain) - 1; $i++) {
-        $current = $chain[$i];
-        $next = $chain[$i + 1];
-        if (strcasecmp($current['issuer_cn'], $next['common_name']) !== 0
-            && strcasecmp($current['issuer_org'], $next['organization']) !== 0) {
-            $chainValid = false;
-            $chainErrors[] = "Cert #{$i} ({$current['common_name']}) issuer doesn't match cert #" . ($i + 1) . " ({$next['common_name']}).";
+        if (!empty($chain[$i]['_pem']) && !empty($chain[$i + 1]['_pem'])) {
+            $r = @openssl_x509_verify($chain[$i]['_pem'], $chain[$i + 1]['_pem']);
+            if ($r !== 1) {
+                $chainValid = false;
+                $chainErrors[] = "Cert #{$i} ({$chain[$i]['common_name']}) signature could not be verified against cert #" . ($i + 1) . " ({$chain[$i + 1]['common_name']}).";
+            }
+        } else {
+            $cnMatch = strcasecmp($chain[$i]['issuer_cn'], $chain[$i+1]['common_name']) === 0;
+            $orgMatch = strcasecmp($chain[$i]['issuer_org'], $chain[$i+1]['organization']) === 0;
+            $hasCnInfo = !empty($chain[$i]['issuer_cn']) || !empty($chain[$i+1]['common_name']);
+            $hasOrgInfo = !empty($chain[$i]['issuer_org']) || !empty($chain[$i+1]['organization']);
+            if ($hasCnInfo && !$cnMatch && ($hasOrgInfo ? !$orgMatch : true)) {
+                $chainValid = false;
+                $chainErrors[] = "Cert #{$i} ({$chain[$i]['common_name']}) issuer doesn't match cert #" . ($i + 1) . " ({$chain[$i+1]['common_name']}).";
+            }
         }
     }
 
-    // Check if root is self-signed
+    // Check if root is self-signed or issuer is in the CA bundle
     $rootSelfSigned = end($chain)['is_self_signed'] ?? false;
-
-    // Try to verify with system CAs
-    $verifyWithCAs = false;
-    $tmpFile = tempnam(sys_get_temp_dir(), 'ssl_chain_');
-    file_put_contents($tmpFile, $peerCert);
-    $caBundle = '/etc/ssl/certs/ca-certificates.crt';
-    if (!file_exists($caBundle)) $caBundle = '/etc/pki/tls/certs/ca-bundle.crt';
-    if (file_exists($caBundle)) {
-        $verifyWithCAs = (bool) @openssl_x509_verify($peerCert, $caBundle);
+    $verifyWithCAs = null;
+    if (!$rootSelfSigned) {
+        $caBundle = '/etc/ssl/certs/ca-certificates.crt';
+        if (!file_exists($caBundle)) $caBundle = '/etc/pki/tls/certs/ca-bundle.crt';
+        if (!file_exists($caBundle) || !($caContent = @file_get_contents($caBundle))) {
+            $caBundle = '/home/admin/tmp/ca-bundle.crt';
+        }
+        if (file_exists($caBundle)) {
+            $caContent = @file_get_contents($caBundle);
+            if ($caContent !== false) {
+                $lastCert = end($chain);
+                $issuerCN = $lastCert['issuer_cn'] ?? '';
+                $verifyWithCAs = !empty($issuerCN) && strpos($caContent, $issuerCN) !== false;
+            }
+        }
     }
-    @unlink($tmpFile);
+
+    // If chain doesn't reach a root and issuer is not in the CA bundle, mark as invalid
+    if (!$rootSelfSigned && $verifyWithCAs === false) {
+        $chainValid = false;
+        $chainErrors[] = "Chain does not reach a trusted root CA and could not be verified against the system CA bundle.";
+    }
 
     Response::success([
         'domain'            => $domain,
         'port'              => $port,
         'chain_length'      => count($chain),
-        'chain'             => $chain,
+        'chain'             => array_map(function($c) { unset($c['_pem']); return $c; }, $chain),
         'chain_valid'       => $chainValid,
         'chain_errors'      => $chainErrors,
         'root_self_signed'  => $rootSelfSigned,
@@ -277,36 +301,24 @@ function doTlsCheck(string $domain, int $port): void
         'TLSv1.3' => ['min' => 'TLSv1.3', 'label' => 'TLS 1.3'],
     ];
 
+    $methodMap = [
+        'TLSv1'   => STREAM_CRYPTO_METHOD_TLSv1_0_CLIENT,
+        'TLSv1.1' => STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT,
+        'TLSv1.2' => STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT,
+        'TLSv1.3' => STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
+    ];
+
     $results = [];
 
     foreach ($versions as $key => $info) {
         $ctx = @stream_context_create([
             'ssl' => [
-                'crypto_method'     => STREAM_CRYPTO_METHOD_TLSv1_0_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
-                'disable_compression' => true,
+                'crypto_method'     => $methodMap[$key],
                 'verify_peer'       => false,
                 'verify_peer_name'  => false,
                 'allow_self_signed' => true,
             ],
         ]);
-
-        // Set the specific version
-        $methodMap = [
-            'TLSv1'   => STREAM_CRYPTO_METHOD_TLSv1_0_CLIENT,
-            'TLSv1.1' => STREAM_CRYPTO_METHOD_TLSv1_1_CLIENT,
-            'TLSv1.2' => STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT,
-            'TLSv1.3' => STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
-        ];
-        if (isset($methodMap[$key])) {
-            $ctx = @stream_context_create([
-                'ssl' => [
-                    'crypto_method'     => $methodMap[$key],
-                    'verify_peer'       => false,
-                    'verify_peer_name'  => false,
-                    'allow_self_signed' => true,
-                ],
-            ]);
-        }
 
         $errno = 0;
         $errstr = '';
@@ -455,11 +467,11 @@ function doHstsCheck(string $domain): void
         if ($hstsInfo['preload']) $score += 10;
         else $recommendations[] = 'Consider adding preload for browser HSTS preload list.';
 
-        // Check via HTTP (should redirect to HTTPS)
-        if (str_starts_with($hstsInfo['source_url'], 'http://')) {
+        // HSTS should only be served over HTTPS
+        if (str_starts_with($hstsInfo['source_url'], 'https://')) {
             $score += 10;
-        } else {
-            $recommendations[] = 'HSTS header should be served over HTTP as well (after redirect to HTTPS).';
+        } elseif (str_starts_with($hstsInfo['source_url'], 'http://')) {
+            $recommendations[] = 'HSTS header should only be served over HTTPS, not HTTP.';
         }
     } else {
         $recommendations[] = 'No HSTS header found. Add Strict-Transport-Security header.';
@@ -580,29 +592,66 @@ function doAudit(string $domain, int $port): void
                         'is_self_signed' => (strcasecmp($cs['CN'] ?? '', $ci['CN'] ?? '') === 0 && ($cs['O'] ?? '') === ($ci['O'] ?? '')),
                         'fingerprint_sha256' => openssl_x509_fingerprint($certPem, 'sha256'),
                         'serial' => $cp['serialNumberHex'] ?? $cp['serialNumber'] ?? '',
+                        '_pem' => (openssl_x509_export($certPem, $pemOut) ? $pemOut : ''),
                     ];
                 }
+                // Verify chain linking using openssl_x509_verify with PEM strings (pure PHP, no exec needed)
                 $chainValid = true;
                 $chainErrors = [];
+                $allCertsPem = [];
+                foreach ($chain as $c) {
+                    $certPem = '';
+                    if (isset($c['_pem'])) { $certPem = $c['_pem']; }
+                    $allCertsPem[] = $certPem;
+                }
                 for ($i = 0; $i < count($chain) - 1; $i++) {
-                    if (strcasecmp($chain[$i]['issuer_cn'], $chain[$i+1]['common_name']) !== 0
-                        && strcasecmp($chain[$i]['issuer_org'], $chain[$i+1]['organization']) !== 0) {
-                        $chainValid = false;
-                        $chainErrors[] = "Cert #{$i} ({$chain[$i]['common_name']}) issuer doesn't match cert #" . ($i+1) . " ({$chain[$i+1]['common_name']}).";
+                    if (!empty($allCertsPem[$i]) && !empty($allCertsPem[$i + 1])) {
+                        $r = @openssl_x509_verify($allCertsPem[$i], $allCertsPem[$i + 1]);
+                        if ($r !== 1) {
+                            $chainValid = false;
+                            $chainErrors[] = "Cert #{$i} ({$chain[$i]['common_name']}) signature could not be verified against cert #" . ($i + 1) . " ({$chain[$i + 1]['common_name']}).";
+                        }
+                    } else {
+                        $cnMatch = strcasecmp($chain[$i]['issuer_cn'], $chain[$i+1]['common_name']) === 0;
+                        $orgMatch = strcasecmp($chain[$i]['issuer_org'], $chain[$i+1]['organization']) === 0;
+                        $hasCnInfo = !empty($chain[$i]['issuer_cn']) || !empty($chain[$i+1]['common_name']);
+                        $hasOrgInfo = !empty($chain[$i]['issuer_org']) || !empty($chain[$i+1]['organization']);
+                        if ($hasCnInfo && !$cnMatch && ($hasOrgInfo ? !$orgMatch : true)) {
+                            $chainValid = false;
+                            $chainErrors[] = "Cert #{$i} ({$chain[$i]['common_name']}) issuer doesn't match cert #" . ($i+1) . " ({$chain[$i+1]['common_name']}).";
+                        }
                     }
                 }
-                $verifyWithCAs = false;
-                $caBundle = '/etc/ssl/certs/ca-certificates.crt';
-                if (!file_exists($caBundle)) $caBundle = '/etc/pki/tls/certs/ca-bundle.crt';
-                if (file_exists($caBundle)) {
-                    $verifyWithCAs = (bool) @openssl_x509_verify($peer, $caBundle);
+                // Check if last cert is self-signed or its issuer is in the CA bundle
+                $lastCert = end($chain);
+                $chainReachesRoot = $lastCert['is_self_signed'] ?? false;
+                $verifyWithCAs = null;
+                if (!$chainReachesRoot) {
+                    $caBundlePath = '/etc/ssl/certs/ca-certificates.crt';
+                    if (!file_exists($caBundlePath)) $caBundlePath = '/etc/pki/tls/certs/ca-bundle.crt';
+                    if (!file_exists($caBundlePath) || !($caContent = @file_get_contents($caBundlePath))) {
+                        $caBundlePath = '/home/admin/tmp/ca-bundle.crt';
+                    }
+                    if (file_exists($caBundlePath)) {
+                        $caContent = @file_get_contents($caBundlePath);
+                        if ($caContent !== false) {
+                            $issuerCN = $lastCert['issuer_cn'] ?? '';
+                            $issuerOrg = $lastCert['issuer_org'] ?? '';
+                            $verifyWithCAs = !empty($issuerCN) && strpos($caContent, $issuerCN) !== false;
+                        }
+                    }
+                }
+                if (!$chainReachesRoot && $verifyWithCAs === false) {
+                    $chainValid = false;
+                    $chainErrors[] = "Chain does not reach a trusted root CA. Last cert ({$lastCert['common_name']}) is not self-signed.";
+                    $chainErrors[] = "Certificate could not be verified against the system CA bundle. The issuing root may be missing or not widely trusted.";
                 }
                 $chainData = [
                     'chain_length' => count($chain),
-                    'chain' => $chain,
+                    'chain' => array_map(function($c) { unset($c['_pem']); return $c; }, $chain),
                     'chain_valid' => $chainValid,
                     'chain_errors' => $chainErrors,
-                    'root_self_signed' => end($chain)['is_self_signed'] ?? false,
+                    'root_self_signed' => $chainReachesRoot,
                     'verified_with_cas' => $verifyWithCAs,
                 ];
             }
@@ -714,8 +763,8 @@ function doAudit(string $domain, int $port): void
         elseif ($hstsInfo['max_age'] > 0) { $score += 10; $recommendations[] = 'max-age is too low. Use at least 31536000 (1 year).'; }
         if ($hstsInfo['include_subdomains']) $score += 20; else $recommendations[] = 'Add includeSubDomains directive.';
         if ($hstsInfo['preload']) $score += 10; else $recommendations[] = 'Consider adding preload for browser HSTS preload list.';
-        if (str_starts_with($hstsInfo['source_url'], 'http://')) { $score += 10; }
-        else { $recommendations[] = 'HSTS header should be served over HTTP as well (after redirect to HTTPS).'; }
+        if (str_starts_with($hstsInfo['source_url'], 'https://')) { $score += 10; }
+        elseif (str_starts_with($hstsInfo['source_url'], 'http://')) { $recommendations[] = 'HSTS header should only be served over HTTPS, not HTTP.'; }
     } else {
         $recommendations[] = 'No HSTS header found. Add Strict-Transport-Security header.';
         $recommendations[] = 'Recommended: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload';

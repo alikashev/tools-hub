@@ -3,7 +3,7 @@
  */
 
 async function renderDnsLookup() {
-    setPageTitle('DNS Lookup Suite', 'Niet moeilijk doen. ficksie het ff');
+    setPageTitle('Nomenclature Oracle', 'Interrogating the hierarchical phonebook of the internet');
     const body = getActiveBody();
     const searchHistory = JSON.parse(localStorage.getItem('dns-history') || '[]');
     const favorites = JSON.parse(localStorage.getItem('dns-favorites') || '[]');
@@ -433,7 +433,18 @@ function renderDnsResult(data) {
             const ptrHost = ptrMap[ip] || null;
             const subLabel = subMap[ip] ? `<span class="dns-rec-ttl" style="color:#818cf8">${escHtml(subMap[ip])}</span>` : '';
             const ptrLabel = ptrHost ? `<span class="dns-rec-ptr-inline" title="Reverse DNS"><i class="fas fa-arrow-left" style="color:#a3e635;margin-right:3px;font-size:0.7rem"></i>${escHtml(ptrHost)}</span>` : '';
-            return `<div class="dns-rec-line${ptrHost ? ' dns-rec-with-ptr' : ''}"><span class="dns-rec-type">A</span><span class="dns-rec-val font-mono">${escHtml(ip)}</span>${ptrLabel}${subLabel}<span class="dns-rec-ttl">TTL ${data.a.ttl || '?'}s</span></div>`;
+            let cpBtn = '';
+            if (ptrHost) {
+                const pl = ptrHost.toLowerCase();
+                if (pl.endsWith('.axc.nl')) {
+                    cpBtn = `<a class="dns-rec-cp-btn" href="http://${ptrHost}:2222/" target="_blank" rel="noopener noreferrer" title="Login to DirectAdmin"><i class="fas fa-right-to-bracket"></i> DirectAdmin</a>`;
+                } else if (pl.endsWith('.versio.nl')) {
+                    cpBtn = `<a class="dns-rec-cp-btn" href="https://${ptrHost}:2222/" target="_blank" rel="noopener noreferrer" title="Login to DirectAdmin"><i class="fas fa-right-to-bracket"></i> DirectAdmin</a>`;
+                } else if (pl.endsWith('.yourhosting.nl')) {
+                    cpBtn = `<a class="dns-rec-cp-btn dns-rec-cp-plesk" href="http://${ptrHost}:8443/" target="_blank" rel="noopener noreferrer" title="Login to Plesk"><i class="fas fa-right-to-bracket"></i> Plesk</a>`;
+                }
+            }
+            return `<div class="dns-rec-line${ptrHost ? ' dns-rec-with-ptr' : ''}"><span class="dns-rec-type">A</span><span class="dns-rec-val font-mono">${escHtml(ip)}</span>${ptrLabel}${subLabel}<span class="dns-rec-ttl">TTL ${data.a.ttl || '?'}s</span>${cpBtn}</div>`;
         }).join('');
         const subRecs = (data.subdomains.records || []).map(r => {
             const subLabel = r.subdomain.split('.')[0] + '.';
@@ -520,7 +531,7 @@ function renderDnsResult(data) {
                     ${qa(`https://web.archive.org/web/*/${data.domain}`, 'fa-clock-rotate-left', 'Archive')}
                     ${qa(`https://securitytrails.com/domain/${data.domain}/dns`, 'fa-clock-rotate-left', 'SecurityTrails')}
                     ${qa(`https://www.whatsmydns.net/#A/${data.domain}`, 'fa-globe', 'Propagation')}
-                    ${qa(`https://dnssec-debugger.verisignlabs.com/${data.domain}`, 'fa-shield-halved', 'DNSSEC')}
+                    ${qa(`https://dnsviz.net/d/${data.domain}/dnssec/`, 'fa-shield-halved', 'DNSViz')}
                 </div>
             </div>
         </div>
